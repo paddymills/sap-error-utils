@@ -5,13 +5,6 @@ use super::{CnfFileRow, Plant, Wbs};
 use super::cnf_serde::three_digit_f64;
 
 lazy_static! {
-    // old, non-hd, wbs element
-    static ref OLD_WBS: Regex = Regex::new(r"S-(\d{7})-2-(\d{2})").expect("Failed to build OLD_WBS Regex");
-    // HD wbs element
-    static ref HD_WBS: Regex = Regex::new(r"D-(\d{7})-\d{5}").expect("Failed to build HD_WBS Regex");
-    // old, non-hd, wbs element
-    static ref CC_WBS: Regex = Regex::new(r"S-.*-2-(2\d{3})").expect("Failed to build CC_WBS Regex");
-
     // Production job number match
     static ref PROD_JOB: Regex = Regex::new(r"S-\d{7}").expect("Failed to build JOB_PART Regex");
 
@@ -136,55 +129,41 @@ impl Into<IssueFileRow> for CnfFileRow {
 }
 
 fn infer_codes(row: &CnfFileRow) -> (IssueCode, String, String) {
-    // part WBS ends in cost center -> cost center issuing
-    if let Some(caps) = CC_WBS.captures(&row.part_wbs) {
-        let code = match &row.matl_wbs {
-            Some(_) => IssueCode::CostCenterFromProject,
-            None => IssueCode::CostCenterFromStock
-        };
+    let (user1, user2) = match &row.part_wbs {
+        Wbs::CostCenter { cc } => {
+            // cost center issuing
+            let code = match &row.matl_wbs {
+                Some(_) => IssueCode::CostCenterFromProject,
+                None => IssueCode::CostCenterFromStock
+            };
+        
+            // cost center
+            let user1 = cc;
+        
+            // infer G/L account
+            let user2 = infer_gl_acct(&row.mark);
     
-        // cost center
-        let user1 = caps
-            .get(1)
-            .map_or("20xx", |m| m.as_str());
-    
-        // infer G/L account
-        let user2 = infer_gl_acct(&row.mark);
+            return (code, format!("{}", user1), user2)
+        },
+        Wbs::Hd { job, id: _ } => {
+            (format!("D-{}", job), "01".into())
+        },
+        Wbs::Legacy { job, shipment } => {
+            (format!("D-{}", job), format!("{:02}", shipment))
+        },
+    };
 
-        return (code, user1.into(), user2)
-    }
-
-    // project stock issuing
     if PROD_JOB.is_match(&row.job) {
-        // infer job and shipment from part WBS element
-        let (user1, user2) = match OLD_WBS.captures(&row.part_wbs) {
-            Some(caps) => (
-                format!("D-{}", caps.get(1).unwrap().as_str()),
-                caps.get(2).unwrap().as_str().into()
-            ),
-            None => {
-                if let Some(caps) = HD_WBS.captures(&row.part_wbs) {
-                    // TODO: fetch shipment from database
-                    (
-                        format!("D-{}", caps.get(1).unwrap().as_str()),
-                        "01".into()
-                    )
-                } else {
-                    panic!("failed to parse Part WBS Element")
-                }
-            }
-        };
-
         let code = match &row.matl_wbs {
             // project stock material
             Some(wbs) => {
                 // part and material have the same project
-                if wbs.starts_with(&user1) { IssueCode::ProjectFromProject }
-
+                if wbs.to_string().starts_with(&user1) { IssueCode::ProjectFromProject }
+    
                 // part and material have different projects
                 else { IssueCode::ProjectFromOtherProject }
             },
-
+    
             // plant stock material
             None => IssueCode::ProjectFromStock
         };
