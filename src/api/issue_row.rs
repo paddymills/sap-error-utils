@@ -1,8 +1,7 @@
 
 use regex::{Regex, RegexSetBuilder, RegexSet};
 
-use super::Plant;
-use super::CnfFileRow;
+use super::{CnfFileRow, Plant, Wbs};
 use super::cnf_serde::three_digit_f64;
 
 lazy_static! {
@@ -78,10 +77,11 @@ pub struct IssueFileRow {
     /// Shipment/GL Account ([User2 Column](#user-columns))
     pub user2: String,
 
+
     /// Material master
     pub matl:     String,
     /// Material WBS Element
-    pub matl_wbs: Option<String>,
+    pub matl_wbs: Option<Wbs>,
     /// Material quantity
     #[serde(serialize_with="three_digit_f64")]
     pub matl_qty: f64,
