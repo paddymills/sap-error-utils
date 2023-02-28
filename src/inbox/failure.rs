@@ -84,25 +84,12 @@ impl Failure {
     // }
 }
 
-// impl From<String> for Failure {
-//     fn from(value: String) -> Self {
-//         if let Some(caps) = INBOX_TEXT.captures(&value) {
-
-//             Self {
-//                 mark: caps.get(1).unwrap().as_str().into(),
-//                 wbs: Wbs::from( caps.get(2).unwrap() ),
-//                 qty: caps.get(3).unwrap().as_str().parse().unwrap(),
-//                 program: caps.get(4).unwrap().as_str().into(),
-
-//                 applied: Vec::new(),
-//             }
-
-//         } else {
-//             panic!("Failed to parse line <{}>", value);
-//         }
-//     }
-// }
-
+/// Parses failure from inbox error string
+/// 
+/// looking to parse a line in the format of
+/// `Planned order not found for {part name}, {wbs elements}, {qty}, Sigmanest Program: {program}`
+/// 
+/// will fail (return Err) if the input string does not match this pattern.
 impl TryFrom<String> for Failure {
     type Error = String;
 
