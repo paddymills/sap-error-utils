@@ -1,4 +1,6 @@
 
+use std::cmp::Ordering;
+
 use regex::Regex;
 
 use crate::api::{CnfFileRow, Wbs, Order, OrderData};
@@ -75,6 +77,36 @@ impl Failure {
             },
             None => Err(format!("No CnfFileRow matched for {}", self.mark))
         }
+    }
+}
+
+impl PartialEq<CnfFileRow> for Failure {
+    fn eq(&self, other: &CnfFileRow) -> bool {
+        self.program == other.program && self.mark == other.mark && self.wbs == other.part_wbs
+    }
+}
+
+impl PartialEq for Failure {
+    fn eq(&self, other: &Self) -> bool {
+        self.program == other.program && self.mark == other.mark && self.wbs == other.wbs
+    }
+}
+
+impl PartialOrd for Failure {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        if self == other {
+            return Some(Ordering::Equal);
+        }
+
+        if self.mark < other.mark {
+            if self.program < other.program {
+                if self.wbs < other.wbs {
+                    return Some(Ordering::Less);
+                }
+            }
+        }
+
+        Some(Ordering::Less)
     }
 }
 

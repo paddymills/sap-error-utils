@@ -1,4 +1,6 @@
 
+use std::ops::{Add, AddAssign};
+
 use super::{Plant, OrderData, Wbs};
 
 use super::cnf_serde::three_digit_f64;
@@ -69,5 +71,25 @@ impl CnfFileRow {
         result.plant = order.plant;
 
         result
+    }
+}
+
+impl Add<CnfFileRow> for CnfFileRow {
+    type Output = Self;
+
+    fn add(self, rhs: CnfFileRow) -> Self::Output {
+        let mut result = self.clone();
+
+        result.part_qty += rhs.part_qty;
+        result.matl_qty += rhs.matl_qty;
+
+        result
+    }
+}
+
+impl AddAssign<CnfFileRow> for CnfFileRow {
+    fn add_assign(&mut self, rhs: CnfFileRow) {
+        self.part_qty += rhs.part_qty;
+        self.matl_qty += rhs.matl_qty;
     }
 }

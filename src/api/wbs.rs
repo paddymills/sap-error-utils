@@ -8,7 +8,7 @@ lazy_static! {
     static ref LEGACY_WBS: Regex = Regex::new(r"S-(\d{7})-2-(\d{2})").expect("Failed to build LEGACY_WBS regex");
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, PartialOrd, Deserialize, Serialize)]
 pub enum Wbs {
     CostCenter { cc: u32 },
     Hd { job: String, id: u32 },
