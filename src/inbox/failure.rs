@@ -58,10 +58,24 @@ impl Failure {
         self.qty - applied
     }
 
-    // TODO: should receive row: CnfFileRow
-    // pub fn set_confirmation_row_data(mut self, row: CnfFileRow) {
-    //     // setter for self.cnf_row
-    // }
+    pub fn set_confirmation_row_data(mut self, row: CnfFileRow) {
+        self.cnf_row = Some(row);
+    }
+
+    pub fn generate_output(self) -> Result<Vec<CnfFileRow>, String> {
+        match self.cnf_row {
+            Some(row) => {
+                let mut result = Vec::new();
+                
+                for appl in self.applied {
+                    result.push(row.modify_with(appl));
+                }
+        
+                Ok(result)
+            },
+            None => Err(format!("No CnfFileRow matched for {}", self.mark))
+        }
+    }
 }
 
 /// Parses failure from inbox error string

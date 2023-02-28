@@ -56,11 +56,11 @@ pub struct CnfFileRow {
 
 impl CnfFileRow {
 
-    pub fn area_per_ea(self) -> f64 {
+    pub fn area_per_ea(&self) -> f64 {
         self.matl_qty / self.part_qty as f64
     }
 
-    pub fn modify_with(self, order: OrderData) -> Self {
+    pub fn modify_with(&self, order: OrderData) -> Self {
         let mut result = self.clone();
 
         result.part_wbs = order.wbs;
