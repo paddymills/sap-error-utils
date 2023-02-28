@@ -1,14 +1,11 @@
 
 use std::path::PathBuf;
 
-use sap_error_utils::inbox::parse_failures;
+use sap_error_utils::inbox::parse_cohv;
 
 // main for testing
 fn main() {
-    let file = PathBuf::from("inbox.txt");
+    let file = PathBuf::from("cohv.txt");
 
-    let inbox = parse_failures(file).unwrap();
-    for f in inbox {
-        println!("{:?}", f);
-    }
+    let _ = parse_cohv(file).unwrap();
 }
