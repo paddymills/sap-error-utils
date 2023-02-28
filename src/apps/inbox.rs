@@ -4,7 +4,7 @@ use std::io::{self, Write};
 
 use eframe::{self, egui};
 
-use crate::inbox::parse_failures;
+use crate::inbox::parsers::parse_failures;
 
 const MAX_FILES: usize = 2000;
 const INPUT_FILENAME: &str = "inbox.txt";
