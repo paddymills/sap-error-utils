@@ -1,0 +1,125 @@
+
+
+use regex::Regex;
+use std::path::PathBuf;
+use std::fs::File;
+use std::io::{self, BufRead};
+
+use crate::api::{Wbs, Order, OrderData};
+
+lazy_static! {
+    static ref INBOX_TEXT: Regex = Regex::new(r"Planned order not found for (\d{7}[a-zA-Z]-[\w-]+), (D-\d{7}-\d{5}), ([\d,]+).000, Sigmanest Program:([\d-]+)")
+        .expect("Failed to build INBOX_TEXT regex");
+}
+
+pub fn parse_failures(path: PathBuf) -> io::Result<Vec<Failure>> {
+    let mut results = Vec::new();
+
+    let file = File::open(path)?;
+    let reader = io::BufReader::new(file);
+
+    for line in reader.lines() {
+        match Failure::try_from(line?) {
+            Ok(f) => results.push(f),
+            Err(e) => eprintln!("{}", e)
+        }
+    }
+
+    Ok(results)
+}
+
+
+#[derive(Debug)]
+pub struct Failure {
+    pub mark: String,
+    pub wbs: Wbs,
+    pub qty: u32,
+    pub program: String,
+
+    // cnf_row: Option<CnfRow>
+    applied: Vec<OrderData>,
+}
+
+impl Failure {
+    pub fn apply_order(mut self, order: Order) -> Option<OrderData> {
+        // TODO: return order if qty not applied
+
+        // decrease qty (or maybe have a qty fn to calculate qty left?)
+        match order {
+            Order::PlannedOrder(mut order_data) => {
+                let failure_qty = self.qty();
+
+                match order_data.qty {
+                    x if x <= failure_qty => {
+                        self.applied.push(order_data);
+
+                        None
+                    },
+                    _ => {
+                        let mut not_applied = order_data.clone();
+                        not_applied.qty -= failure_qty;
+
+                        order_data.qty = failure_qty;
+                        self.applied.push(order_data);
+
+                        Some(not_applied)
+                    }
+                }
+            },
+            Order::ProductionOrder(_) => panic!("cannot apply a production order to a failure")
+        }
+    }
+
+    pub fn qty(&self) -> u32 {
+        let applied = self.applied
+            .iter()
+            .fold(0, |acc, elem| acc + elem.qty);
+
+        self.qty - applied
+    }
+
+    // TODO: should receive row: CnfRow
+    // pub fn set_confirmation_row_data(mut self, row: CnfRow) {
+    //     // setter for self.cnf_row
+    // }
+}
+
+// impl From<String> for Failure {
+//     fn from(value: String) -> Self {
+//         if let Some(caps) = INBOX_TEXT.captures(&value) {
+
+//             Self {
+//                 mark: caps.get(1).unwrap().as_str().into(),
+//                 wbs: Wbs::from( caps.get(2).unwrap() ),
+//                 qty: caps.get(3).unwrap().as_str().parse().unwrap(),
+//                 program: caps.get(4).unwrap().as_str().into(),
+
+//                 applied: Vec::new(),
+//             }
+
+//         } else {
+//             panic!("Failed to parse line <{}>", value);
+//         }
+//     }
+// }
+
+impl TryFrom<String> for Failure {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        if let Some(caps) = INBOX_TEXT.captures(&value) {
+            return Ok(
+                Self {
+                    mark: caps.get(1).unwrap().as_str().into(),
+                    wbs: Wbs::from( caps.get(2).unwrap() ),
+                    qty: caps.get(3).unwrap().as_str().parse().unwrap(),
+                    program: caps.get(4).unwrap().as_str().into(),
+
+                    applied: Vec::new(),
+                }
+            )
+        }
+
+        Err(format!("Failed to parse line <{}>", value))
+    }
+}
