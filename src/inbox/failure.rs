@@ -1,11 +1,7 @@
 
-
 use regex::Regex;
-use std::path::PathBuf;
-use std::fs::File;
-use std::io::{self, BufRead};
 
-use crate::api::{CnfRow, Wbs, Order, OrderData};
+use crate::api::{CnfFileRow, Wbs, Order, OrderData};
 
 lazy_static! {
     static ref INBOX_TEXT: Regex = Regex::new(r"Planned order not found for (\d{7}[a-zA-Z]-[\w-]+), (D-\d{7}-\d{5}), ([\d,]+).000, Sigmanest Program:([\d-]+)")
@@ -20,7 +16,7 @@ pub struct Failure {
     pub qty: u32,
     pub program: String,
 
-    cnf_row: Option<CnfRow>,
+    cnf_row: Option<CnfFileRow>,
     applied: Vec<OrderData>,
 }
 
@@ -62,8 +58,8 @@ impl Failure {
         self.qty - applied
     }
 
-    // TODO: should receive row: CnfRow
-    // pub fn set_confirmation_row_data(mut self, row: CnfRow) {
+    // TODO: should receive row: CnfFileRow
+    // pub fn set_confirmation_row_data(mut self, row: CnfFileRow) {
     //     // setter for self.cnf_row
     // }
 }
@@ -86,7 +82,7 @@ impl TryFrom<String> for Failure {
                     qty: caps.get(3).unwrap().as_str().parse().unwrap(),
                     program: caps.get(4).unwrap().as_str().into(),
 
-                    cnf_row: None,
+                    cnf_row: None::<CnfFileRow>,
                     applied: Vec::new(),
                 }
             )

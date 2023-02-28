@@ -2,6 +2,13 @@
 mod failure;
 pub use failure::Failure;
 
+mod cohv;
+pub use cohv::parse_cohv;
+
+use std::fs::File;
+use std::io::{self, BufRead};
+use std::path::PathBuf;
+
 pub fn parse_failures(path: PathBuf) -> io::Result<Vec<Failure>> {
     let mut results = Vec::new();
 
