@@ -5,3 +5,4 @@
 pub mod api; 
 pub mod apps;
 pub mod inbox;
+pub mod paths;
