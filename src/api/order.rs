@@ -1,5 +1,5 @@
 
-use super::Wbs;
+use super::{Wbs, Plant};
 
 #[derive(Debug)]
 pub enum Order {
@@ -13,6 +13,7 @@ pub struct OrderData {
     pub mark: String,
     pub qty: u32,
     pub wbs: Wbs,
+    pub plant: Plant
 }
 
 impl OrderData {

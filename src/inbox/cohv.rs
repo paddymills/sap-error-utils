@@ -33,10 +33,11 @@ impl Header {
         let split_row: Vec<&str> = row.split("|").map(|c| c.trim()).collect();
 
         let data = OrderData {
-            id:   split_row[self.order].parse().unwrap(),
-            mark: split_row[self.mark].into(),
-            qty:  split_row[self.qty].parse().unwrap(),
-            wbs:  split_row[self.wbs].into(),
+            id:    split_row[self.order].parse().unwrap(),
+            mark:  split_row[self.mark].into(),
+            qty:   split_row[self.qty].parse().unwrap(),
+            wbs:   split_row[self.wbs].into(),
+            plant: split_row[self.plant].into(),
         };
 
         match split_row[self._type] {
