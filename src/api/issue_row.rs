@@ -170,7 +170,6 @@ fn infer_codes(row: &CnfFileRow) -> (IssueCode, String, String) {
                         "01".into()
                     )
                 } else {
-                    error!("failed to parse Part WBS Element: {}", &row.part_wbs);
                     panic!("failed to parse Part WBS Element")
                 }
             }
@@ -194,7 +193,6 @@ fn infer_codes(row: &CnfFileRow) -> (IssueCode, String, String) {
     }
 
     // unmatched data
-    error!("unmatched data when converting to issuing row");
     panic!("cnf -> issue conversion failed");
     // TODO: default result
 }
