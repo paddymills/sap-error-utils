@@ -1,4 +1,5 @@
 
+use std::fmt::{Display, Debug};
 use regex::Regex;
 
 lazy_static! {
@@ -6,7 +7,7 @@ lazy_static! {
     static ref LEGACY_WBS: Regex = Regex::new(r"S-(\d{7})-2-(\d{2})").expect("Failed to build LEGACY_WBS regex");
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum Wbs {
     Legacy { job: String, shipment: u32 },
     Hd { job: String, id: u32 },
@@ -63,11 +64,20 @@ impl From<regex::Match<'_>> for Wbs {
     }
 }
 
-impl ToString for Wbs {
-    fn to_string(&self) -> String {
+impl Display for Wbs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Legacy {job, shipment} => format!("S-{}-{}", job, shipment),
-            Self::Hd {job, id} => format!("D-{}-{}", job, id)
+            Self::Legacy { job, shipment } => write!(f, "S-{}-{}", job, shipment),
+            Self::Hd     { job, id       } => write!(f, "D-{}-{}", job, id)
+        }
+    }
+}
+
+impl Debug for Wbs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Legacy { .. } => write!(f, "Legacy<{}>", self),
+            Self::Hd     { .. } => write!(f, "Hd <{}>", self)
         }
     }
 }
