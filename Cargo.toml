@@ -1,0 +1,20 @@
+[package]
+name = "sap-error-utils"
+version = "0.1.0"
+edition = "2021"
+default-run = "test"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.69"
+eframe = { version = "0.21.3", features = ["persistence"] }
+lazy_static = "1.4.0"
+prodctrl = { git = "https://github.com/paddymills/highsteel-prodctrl", version = "0.1.0" }
+regex = "1.7.1"
+
+[[bin]]
+name = "inbox"
+
+[[bin]]
+name = "test"
