@@ -5,27 +5,11 @@ use std::path::PathBuf;
 use std::fs::File;
 use std::io::{self, BufRead};
 
-use crate::api::{Wbs, Order, OrderData};
+use crate::api::{CnfRow, Wbs, Order, OrderData};
 
 lazy_static! {
     static ref INBOX_TEXT: Regex = Regex::new(r"Planned order not found for (\d{7}[a-zA-Z]-[\w-]+), (D-\d{7}-\d{5}), ([\d,]+).000, Sigmanest Program:([\d-]+)")
         .expect("Failed to build INBOX_TEXT regex");
-}
-
-pub fn parse_failures(path: PathBuf) -> io::Result<Vec<Failure>> {
-    let mut results = Vec::new();
-
-    let file = File::open(path)?;
-    let reader = io::BufReader::new(file);
-
-    for line in reader.lines() {
-        match Failure::try_from(line?) {
-            Ok(f) => results.push(f),
-            Err(e) => eprintln!("{}", e)
-        }
-    }
-
-    Ok(results)
 }
 
 
@@ -36,7 +20,7 @@ pub struct Failure {
     pub qty: u32,
     pub program: String,
 
-    // cnf_row: Option<CnfRow>
+    cnf_row: Option<CnfRow>,
     applied: Vec<OrderData>,
 }
 
@@ -102,6 +86,7 @@ impl TryFrom<String> for Failure {
                     qty: caps.get(3).unwrap().as_str().parse().unwrap(),
                     program: caps.get(4).unwrap().as_str().into(),
 
+                    cnf_row: None,
                     applied: Vec::new(),
                 }
             )
