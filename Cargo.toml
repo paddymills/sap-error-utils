@@ -8,6 +8,7 @@ default-run = "test"
 
 [dependencies]
 anyhow = "1.0.69"
+chrono = "0.4.23"
 eframe = { version = "0.21.3", features = ["persistence"] }
 lazy_static = "1.4.0"
 regex = "1.7.1"
