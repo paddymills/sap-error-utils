@@ -3,7 +3,7 @@ use std::fmt::{Display, Debug};
 use regex::Regex;
 
 lazy_static! {
-    static ref COST_CENTER_WBS: Regex = Regex::new(r"S-.*-2-(2\d{3}").expect("Failed to build COST_CENTER_WBS regex");
+    static ref COST_CENTER_WBS: Regex = Regex::new(r"S-.*-2-(2\d{3})").expect("Failed to build COST_CENTER_WBS regex");
     static ref HD_WBS: Regex = Regex::new(r"D-(\d{7})-(\d{5})").expect("Failed to build HD_WBS regex");
     static ref LEGACY_WBS: Regex = Regex::new(r"S-(\d{7})-2-(\d{2})").expect("Failed to build LEGACY_WBS regex");
 }
