@@ -105,7 +105,7 @@ impl eframe::App for SapInboxApp {
                 ui.vertical_centered(|ui| {
                     if ui.button("Genereate parts list").clicked() {
                         // TODO: log failure
-                        let status = match self.generate_parts() {
+                        self.status = match self.generate_parts() {
                             Ok(_) => "parts list generated".into(),
                             Err(e) => format!("Error generating partslist: {}", e)
                         };
