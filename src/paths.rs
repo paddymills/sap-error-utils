@@ -12,6 +12,9 @@ lazy_static! {
     /// Confirmation files outbox (to be picked up by workflow)
     pub static ref CNF_OUTBOX: &'static Path = Path::new(r"\\hssieng\SNData\SimTrans\Outbox");
 
+    /// Confirmation file outbound (where SAP workflow picks them up from)
+    pub static ref SAP_OUTBOUND: &'static Path = Path::new(r"\\hiifileserv1\sigmanestprd\Outbound");
+
     /// Production file pattern
     pub static ref PROD_FILE_NAME: Regex = Regex::new(r"Production_(\d{14}).ready").expect("failed to build regex");
 }

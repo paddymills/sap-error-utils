@@ -9,7 +9,9 @@ default-run = "test"
 [dependencies]
 anyhow = "1.0.69"
 chrono = "0.4.23"
+csv = "1.2.0"
 eframe = { version = "0.21.3", features = ["persistence"] }
+glob = "0.3.1"
 lazy_static = "1.4.0"
 regex = "1.7.1"
 serde = { version = "1.0.152", features = ["derive"] }

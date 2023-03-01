@@ -1,10 +1,11 @@
 
-use std::fs::File;
+use std::fs::{File, self};
 use std::io::{self, Write};
 
 use eframe::{self, egui};
 
 use crate::inbox::parsers::parse_failures;
+use crate::paths;
 
 const MAX_FILES: usize = 2000;
 const INPUT_FILENAME: &str = "inbox.txt";
@@ -69,6 +70,25 @@ impl SapInboxApp {
 
         Ok(())
     }
+
+    fn move_prodfiles(&self) -> io::Result<()> {
+
+        for entry in glob::glob("Production_*.ready").unwrap() {
+            match entry {
+                Ok(prodfile) => {
+                    let mut to = paths::SAP_OUTBOUND.to_path_buf();
+                    to.push(&prodfile);
+
+                    fs::copy(&prodfile, to)?;
+                    fs::remove_file(&prodfile)?;
+                },
+                Err(_) => todo!("handle error")
+            }
+        }
+
+
+        Ok(())
+    }
 }
 
 impl eframe::App for SapInboxApp {
@@ -85,19 +105,19 @@ impl eframe::App for SapInboxApp {
                 ui.vertical_centered(|ui| {
                     if ui.button("Genereate parts list").clicked() {
                         // TODO: log failure
-                        if let Err(e) = self.generate_parts() {
-                            self.status = format!("Err: {}", e)
-                        }
-                        else {
-                            self.status = "parts list generated".into();
-                        }
-
+                        let status = match self.generate_parts() {
+                            Ok(_) => "parts list generated".into(),
+                            Err(e) => format!("Error generating partslist: {}", e)
+                        };
                     }
                     if ui.button("Genereate confirmation file").clicked() {
                         self.status = "confirmation file generated".into();
                     }
                     if ui.button("Move confirmation file(s)").clicked() {
-                        self.status = "file(s) moved".into();
+                        self.status = match self.move_prodfiles() {
+                            Ok(_) => "file(s) moved".into(),
+                            Err(e) => format!("Error moving files: {}", e)
+                        };
                     }
 
                     ui.group(|ui| {
