@@ -50,12 +50,21 @@ impl SapInboxApp {
 
     fn generate_parts(&self) -> io::Result<()> {
         let file = std::path::PathBuf::from(INPUT_FILENAME);
-        let inbox = parse_failures(file).unwrap();
+        let inbox = parse_failures(file)?;
+
+        // get marks only from failures
+        let mut marks: Vec<&String> = inbox
+            .iter()
+            .map(|f| &f.mark)
+            .collect();
+
+        // remove duplicates
+        marks.sort();
+        marks.dedup();
 
         let mut buffer = File::create(PARTS_FILENAME)?;
-
-        for f in inbox {
-            writeln!(buffer, "{}", f.mark)?;
+        for m in marks {
+            writeln!(buffer, "{}", m)?;
         }
 
         Ok(())
