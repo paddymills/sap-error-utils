@@ -134,6 +134,6 @@ impl TryFrom<String> for Failure {
             )
         }
 
-        Err(format!("Failed to parse line <{}>", value))
+        Err(format!("Failed to parse line `{}`", value))
     }
 }
