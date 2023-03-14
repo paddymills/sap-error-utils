@@ -14,9 +14,12 @@ lazy_static! {
 
     /// Confirmation file outbound (where SAP workflow picks them up from)
     pub static ref SAP_OUTBOUND: &'static Path = Path::new(r"\\hiifileserv1\sigmanestprd\Outbound");
+    
+    /// SAP archive for confirmation, issue, stock, etc. files
+    pub static ref SAP_ARCHIVE: &'static Path = Path::new(r"\\hiifileserv1\sigmanestprd\Archive");
 
     /// Production file pattern
-    pub static ref PROD_FILE_NAME: Regex = Regex::new(r"Production_(\d{14}).ready").expect("failed to build regex");
+    pub static ref PROD_FILE_NAME: Regex = Regex::new(r"Production_(\d{14}).(?:ready|outbound\.archive)").expect("failed to build regex");
 }
 
 /// Create a filename with a naturally sortable timestamp
