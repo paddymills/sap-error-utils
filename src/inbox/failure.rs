@@ -1,5 +1,5 @@
 
-use std::cmp::Ordering;
+use std::{cmp::Ordering, hash::{Hash, Hasher}};
 
 use regex::Regex;
 
@@ -99,14 +99,28 @@ impl PartialOrd for Failure {
         }
 
         if self.mark < other.mark {
+            return Some(Ordering::Less);
+        }
+        else if self.mark == other.mark {
             if self.program < other.program {
+                return Some(Ordering::Less);
+            }
+            else if self.program == other.program {
                 if self.wbs < other.wbs {
                     return Some(Ordering::Less);
                 }
             }
         }
 
-        Some(Ordering::Less)
+        Some(Ordering::Greater)
+    }
+}
+
+impl Hash for Failure {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.mark.hash(state);
+        self.wbs.hash(state);
+        self.program.hash(state);
     }
 }
 
