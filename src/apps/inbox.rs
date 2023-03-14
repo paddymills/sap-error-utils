@@ -145,7 +145,7 @@ impl eframe::App for SapInboxApp {
                                     .speed(10.0)
                                     .clamp_range(10..=self.max_files)
                                     .custom_formatter(|n, _| {
-                                        if n == MAX_FILES as f64 {
+                                        if n == self.max_files as f64 {
                                             return String::from("all");
                                         }
 
