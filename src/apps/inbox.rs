@@ -140,7 +140,6 @@ impl eframe::App for SapInboxApp {
                         ui.horizontal_centered(|ui| {
                             ui.label("Files to search");
                             ui.add(
-                                // TODO: get total number a file to make a max
                                 egui::DragValue::new(&mut self.files_to_parse)
                                     .speed(10.0)
                                     .clamp_range(10..=self.max_files)
