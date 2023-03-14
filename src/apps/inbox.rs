@@ -5,6 +5,7 @@ use std::io::{self, Write};
 use eframe::{self, egui};
 
 use crate::inbox::parsers::parse_failures;
+use crate::inbox::cnf_files;
 use crate::paths;
 
 const MAX_FILES: usize = 2000;
@@ -15,6 +16,7 @@ const PARTS_FILENAME: &str = "parts.txt";
 pub struct SapInboxApp {
     reset: bool,
     files_to_parse: usize,
+    max_files: usize,
 
     status: String,
 }
@@ -44,6 +46,7 @@ impl SapInboxApp {
     fn init(_cc: &eframe::CreationContext<'_>) -> Self {
         Self {
             files_to_parse: 200,
+            max_files: cnf_files::get_num_files().unwrap_or(MAX_FILES),
 
             ..Default::default()
         }
@@ -67,6 +70,13 @@ impl SapInboxApp {
         for m in marks {
             writeln!(buffer, "{}", m)?;
         }
+
+        Ok(())
+    }
+
+    fn generate_comparison(&self) -> io::Result<()> {
+        let file = std::path::PathBuf::from(INPUT_FILENAME);
+        let _inbox = parse_failures(file)?;
 
         Ok(())
     }
@@ -111,7 +121,10 @@ impl eframe::App for SapInboxApp {
                         };
                     }
                     if ui.button("Genereate confirmation file").clicked() {
-                        self.status = "confirmation file generated".into();
+                        self.status = match self.generate_comparison() {
+                            Ok(_) => "confirmation file generated".into(),
+                            Err(e) => format!("Error generating confirmation file: {}", e)
+                        };
                     }
                     if ui.button("Move confirmation file(s)").clicked() {
                         self.status = match self.move_prodfiles() {
@@ -120,7 +133,7 @@ impl eframe::App for SapInboxApp {
                         };
                     }
 
-                    ui.group(|ui| {
+                    ui.collapsing("Options", |ui| {
 
                         ui.checkbox(&mut self.reset, "Remove generated files");
                         
@@ -130,7 +143,7 @@ impl eframe::App for SapInboxApp {
                                 // TODO: get total number a file to make a max
                                 egui::DragValue::new(&mut self.files_to_parse)
                                     .speed(10.0)
-                                    .clamp_range(10..=MAX_FILES)
+                                    .clamp_range(10..=self.max_files)
                                     .custom_formatter(|n, _| {
                                         if n == MAX_FILES as f64 {
                                             return String::from("all");
