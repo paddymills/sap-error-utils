@@ -67,10 +67,14 @@ pub fn get_num_files() -> io::Result<usize> {
 }
 
 pub fn parse_file(filepath: PathBuf) -> io::Result<Vec<CnfFileRow>> {
-    let results = Vec::new();
+    let mut records = Vec::new();
 
     let mut reader = READY_READER.from_path(filepath)?;
     reader.set_headers( StringRecord::from(HEADERS.to_vec()) );
 
-    Ok(results)
+    for result in reader.deserialize::<CnfFileRow>() {
+        records.push(result?)
+    }
+
+    Ok(records)
 }
