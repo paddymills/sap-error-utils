@@ -1,14 +1,9 @@
 
-use std::path::PathBuf;
-
-use sap_error_utils::inbox::parsers::parse_cohv;
-
 // main for testing
-fn main() {
-    let file = PathBuf::from("cohv.txt");
+fn main() -> std::io::Result<()> {
+    let app = sap_error_utils::apps::SapInboxApp::default();
+    
+    app.generate_comparison()?;
 
-    let orders = parse_cohv(file).unwrap();
-    for order in orders {
-        println!("{:?}", order);
-    }
+    Ok(())
 }
