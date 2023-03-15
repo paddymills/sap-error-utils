@@ -1,3 +1,27 @@
-Planned order not found for 1210105A-X5F, D-1210105-10362, 1.000, Sigmanest Program:63347
-Planned order not found for 1210027B-X214C, D-1210027-10811, 24.000, Sigmanest Program:61895
-Complete task 0001 in Notification 200026353
+03/14/2023	Planned order not found for 1220123A-M1D, D-1220123-10580, 5.000, Sigmanest Program:63535	@CS\QReady@
+03/14/2023	Planned order not found for 1220123A-X1H, D-1220123-10388, 2.000, Sigmanest Program:63535	@CS\QReady@
+03/14/2023	Planned order not found for 1210123A-M3D, D-1210123-12116, 2.000, Sigmanest Program:63696	@CS\QReady@
+03/14/2023	Planned order not found for 1220123A-X1A, D-1220123-10388, 8.000, Sigmanest Program:63535	@CS\QReady@
+03/14/2023	Planned order not found for 1220123A-X2P, D-1220123-10540, 1.000, Sigmanest Program:63527	@CS\QReady@
+03/14/2023	Planned order not found for 1210110A-X3P, D-1210110-12748, 11.000, Sigmanest Program:63425	@CS\QReady@
+03/14/2023	Planned order not found for 1220123A-X2MA, D-1220123-10388, 1.000, Sigmanest Program:63527	@CS\QReady@
+03/14/2023	Planned order not found for 1220123A-X2P, D-1220123-10448, 1.000, Sigmanest Program:63527	@CS\QReady@
+03/14/2023	Planned order not found for 1220123A-M1D, D-1220123-10580, 3.000, Sigmanest Program:63536	@CS\QReady@
+03/13/2023	Planned order not found for 1210027B-X204C, D-1210027-10340, 1.000, Sigmanest Program:63628	@CS\QReady@
+03/13/2023	Planned order not found for 1210027B-X209F, D-1210027-10266, 1.000, Sigmanest Program:63628	@CS\QReady@
+03/13/2023	Planned order not found for 1210027B-X208B, D-1210027-10667, 1.000, Sigmanest Program:63628	@CS\QReady@
+03/13/2023	Planned order not found for 1220123A-M1D, D-1220123-10580, 16.000, Sigmanest Program:63532	@CS\QReady@
+03/13/2023	Planned order not found for 1220123A-M1F, D-1220123-10580, 6.000, Sigmanest Program:63530	@CS\QReady@
+03/10/2023	Planned order not found for 1210027B-X205A, D-1210027-10631, 1.000, Sigmanest Program:63629	@CS\QReady@
+03/10/2023	Planned order not found for 1210027B-X204C, D-1210027-10340, 1.000, Sigmanest Program:63629	@CS\QReady@
+03/10/2023	Planned order not found for 1210027B-X209F, D-1210027-10266, 1.000, Sigmanest Program:63629	@CS\QReady@
+03/10/2023	Planned order not found for 1210027B-X205A, D-1210027-10340, 1.000, Sigmanest Program:63626	@CS\QReady@
+03/10/2023	Planned order not found for 1210027B-X203C, D-1210027-10304, 1.000, Sigmanest Program:63626	@CS\QReady@
+03/10/2023	Planned order not found for 1210027B-X202A, D-1210027-10773, 1.000, Sigmanest Program:63611	@CS\QReady@
+03/10/2023	Goods Receipt 1190163B02-15004 Quantity 156.000 EA Plant HS01	@CS\QReady@
+03/09/2023	Planned order not found for 1210161A-X1C, D-1210161-11804, 8.000, Sigmanest Program:63614	@CS\QReady@
+03/09/2023	Planned order not found for 1210161A-X1C, D-1210161-11709, 8.000, Sigmanest Program:63614	@CS\QReady@
+03/08/2023	Planned order not found for 1210027B-X209F, D-1210027-10266, 1.000, Sigmanest Program:63604	@CS\QReady@
+03/08/2023	Planned order not found for 1210110A-X3K, D-1210110-12844, 4.000, Sigmanest Program:63422	@CS\QReady@
+03/07/2023	Planned order not found for 1210027B-X209A, D-1210027-10773, 1.000, Sigmanest Program:63603	@CS\QReady@
+02/20/2023	Complete task 0001 in Notification 200026353	@CV\QExecuted@
