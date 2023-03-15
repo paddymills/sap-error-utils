@@ -19,7 +19,7 @@ pub struct Failure {
     pub program: String,
 
     cnf_row: Option<CnfFileRow>,
-    applied: Vec<OrderData>,
+    pub applied: Vec<OrderData>,
 }
 
 impl Failure {
@@ -36,6 +36,10 @@ impl Failure {
 
     pub fn apply_order_unchecked(&mut self, mut order_data: OrderData) -> Option<OrderData> {
         let failure_qty = self.qty();
+
+        if failure_qty == 0 {
+            return Some( order_data );
+        }
 
         match order_data.qty {
             x if x <= failure_qty => {
