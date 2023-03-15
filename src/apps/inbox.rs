@@ -1,10 +1,12 @@
 
 use std::fs::{File, self};
 use std::io::{self, Write};
+use std::path::PathBuf;
 
 use eframe::{self, egui};
 
-use crate::inbox::parsers::parse_failures;
+use crate::api::Order;
+use crate::inbox::parsers::{parse_failures, parse_cohv};
 use crate::inbox::cnf_files;
 use crate::paths;
 
@@ -53,7 +55,7 @@ impl SapInboxApp {
     }
 
     fn generate_parts(&self) -> io::Result<()> {
-        let file = std::path::PathBuf::from(INPUT_FILENAME);
+        let file = PathBuf::from(INPUT_FILENAME);
         let inbox = parse_failures(file)?;
 
         // get marks only from failures
@@ -75,8 +77,36 @@ impl SapInboxApp {
     }
 
     fn generate_comparison(&self) -> io::Result<()> {
-        let file = std::path::PathBuf::from(INPUT_FILENAME);
-        let _inbox = parse_failures(file)?;
+        let file = PathBuf::from(INPUT_FILENAME);
+        let mut inbox = parse_failures(file)?;
+        inbox.sort_by( |a, b| a.partial_cmp(b).unwrap() );
+
+        let cohv = parse_cohv(PathBuf::from("cohv.txt"))?;
+
+        for order in cohv {
+            match order {
+                Order::PlannedOrder(mut data) => {
+                    'inbox: for failure in &mut inbox {
+                        if failure.mark == data.mark {
+                            let order = failure.apply_order_unchecked(data);
+    
+                            match order {
+                                Some(d) => data = d,
+
+                                // break loop if order is 100% applied
+                                None => break 'inbox
+                            }
+                        }
+                    }
+                },
+                _ => ()
+            }
+        }
+
+        // print results
+        for failure in inbox {
+            println!("{:?}", failure);
+        }
 
         Ok(())
     }
@@ -95,7 +125,6 @@ impl SapInboxApp {
                 Err(_) => todo!("handle error")
             }
         }
-
 
         Ok(())
     }

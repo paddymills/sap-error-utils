@@ -23,32 +23,35 @@ pub struct Failure {
 }
 
 impl Failure {
-    pub fn apply_order(mut self, order: Order) -> Option<OrderData> {
+    pub fn apply_order(&mut self, order: Order) -> Option<Order> {
         // TODO: return order if qty not applied
 
-        // decrease qty (or maybe have a qty fn to calculate qty left?)
         match order {
-            Order::PlannedOrder(mut order_data) => {
-                let failure_qty = self.qty();
-
-                match order_data.qty {
-                    x if x <= failure_qty => {
-                        self.applied.push(order_data);
-
-                        None
-                    },
-                    _ => {
-                        let mut not_applied = order_data.clone();
-                        not_applied.qty -= failure_qty;
-
-                        order_data.qty = failure_qty;
-                        self.applied.push(order_data);
-
-                        Some(not_applied)
-                    }
-                }
+            Order::PlannedOrder(order_data) => {
+                self.apply_order_unchecked(order_data).map(|d| Order::PlannedOrder(d))
             },
             Order::ProductionOrder(_) => panic!("cannot apply a production order to a failure")
+        }
+    }
+
+    pub fn apply_order_unchecked(&mut self, mut order_data: OrderData) -> Option<OrderData> {
+        let failure_qty = self.qty();
+
+        match order_data.qty {
+            x if x <= failure_qty => {
+                self.applied.push(order_data);
+
+                None
+            },
+            _ => {
+                let mut not_applied = order_data.clone();
+                not_applied.qty -= failure_qty;
+
+                order_data.qty = failure_qty;
+                self.applied.push(order_data);
+
+                Some( not_applied )
+            }
         }
     }
 
