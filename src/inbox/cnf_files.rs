@@ -83,3 +83,13 @@ pub fn parse_file(filepath: PathBuf) -> io::Result<Vec<CnfFileRow>> {
 
     Ok(records)
 }
+
+pub fn write_file(records: Vec<CnfFileRow>, filepath: PathBuf) -> io::Result<()> {
+    let mut writer = READY_WRITER.from_path(filepath)?;
+
+    for record in records {
+        writer.serialize(record)?
+    }
+
+    Ok(())
+}

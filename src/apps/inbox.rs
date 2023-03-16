@@ -5,10 +5,10 @@ use std::path::PathBuf;
 
 use eframe::{self, egui};
 
-use crate::api::Order;
+use crate::api::{Order, CnfFileRow};
 use crate::inbox::FailureMatchStatus;
 use crate::inbox::parsers::{parse_failures, parse_cohv};
-use crate::inbox::cnf_files::{self, get_last_n_files, parse_file};
+use crate::inbox::cnf_files::{self, get_last_n_files, parse_file, write_file};
 use crate::paths;
 
 const MAX_FILES: usize = 2000;
@@ -126,17 +126,27 @@ impl SapInboxApp {
         for f in &inbox {
             match f.status() {
                 FailureMatchStatus::NoConfirmationRow => {
-                    println!("No confirmation row for {} <{}, {}>", f.mark, f.wbs, f.program);
+                    eprintln!("{}\t<{}, {}> has no confirmation row", f.mark, f.wbs, f.program);
                 },
                 FailureMatchStatus::NotEnoughOrdersApplied(qty) => {
-                    println!("{}/{} not applied for {} <{}, {}>", qty, f.qty, f.mark, f.wbs, f.program);
+                    eprintln!("{}\t<{}, {}> missing orders for qty of {}/{}", f.mark, f.wbs, f.program, qty, f.qty);
                 },
                 _ => ()
             }
         }
 
         let prodfile = paths::timestamped_file("Production", "ready");
-        
+        let mut records: Vec<CnfFileRow> = Vec::new();
+        inbox.iter_mut()
+            .map(|f| f.generate_output())
+            .for_each(|r| {
+                match r {
+                    Ok(results) => records.extend(results),
+                    Err(e) => eprintln!("{}", e),
+                }
+            });
+
+        write_file(records, prodfile.into())?;
 
         Ok(())
     }
