@@ -37,6 +37,9 @@ lazy_static! {
 pub fn get_last_n_files(n: usize) -> io::Result<Vec<DirEntry>> {
     let mut entries = fs::read_dir(paths::SAP_ARCHIVE.to_path_buf())?
         .filter_map(Result::ok)
+        .filter(|entry| {
+            paths::PROD_FILE_NAME.is_match(entry.file_name().to_str().unwrap_or(""))
+        })
         .collect::<Vec<_>>();
 
     entries.sort_by(|a, b| {
@@ -73,7 +76,9 @@ pub fn parse_file(filepath: PathBuf) -> io::Result<Vec<CnfFileRow>> {
     reader.set_headers( StringRecord::from(HEADERS.to_vec()) );
 
     for result in reader.deserialize::<CnfFileRow>() {
-        records.push(result?)
+        if let Ok(res) = result {
+            records.push(res);
+        }
     }
 
     Ok(records)
