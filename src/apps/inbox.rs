@@ -7,7 +7,7 @@ use eframe::{self, egui};
 
 use crate::api::Order;
 use crate::inbox::parsers::{parse_failures, parse_cohv};
-use crate::inbox::cnf_files;
+use crate::inbox::cnf_files::{self, get_last_n_files, parse_file};
 use crate::paths;
 
 const MAX_FILES: usize = 2000;
@@ -54,7 +54,7 @@ impl SapInboxApp {
         }
     }
 
-    fn generate_parts(&self) -> io::Result<()> {
+    pub fn generate_parts(&self) -> io::Result<()> {
         let file = PathBuf::from(INPUT_FILENAME);
         let inbox = parse_failures(file)?;
 
@@ -76,14 +76,22 @@ impl SapInboxApp {
         Ok(())
     }
 
-    fn generate_comparison(&self) -> io::Result<()> {
+    pub fn generate_comparison(&self) -> io::Result<()> {
+        // parse inbox
         let file = PathBuf::from(INPUT_FILENAME);
         let mut inbox = parse_failures(file)?;
         inbox.sort_by( |a, b| a.partial_cmp(b).unwrap() );
 
-        let cohv = parse_cohv(PathBuf::from("cohv.txt"))?;
+        // get confirmation file data
+        for f in get_last_n_files(self.files_to_parse) {
+            for cnf_row in parse_file(f) {
+                
+            }
+        }
 
-        for order in cohv {
+
+        // get orders from cohv
+        for order in parse_cohv(PathBuf::from("cohv.txt"))? {
             match order {
                 Order::PlannedOrder(mut data) => {
                     'inbox: for failure in &mut inbox {
@@ -105,7 +113,10 @@ impl SapInboxApp {
 
         // print results
         for failure in inbox {
-            println!("{:?}", failure);
+            println!("{}({})", failure.mark, failure.qty);
+            for order in failure.applied {
+                println!("\t{}: {}", order.wbs, order.qty);
+            }
         }
 
         Ok(())
