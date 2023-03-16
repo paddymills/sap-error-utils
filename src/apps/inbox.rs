@@ -17,9 +17,9 @@ const PARTS_FILENAME: &str = "parts.txt";
 
 #[derive(Debug,Default)]
 pub struct SapInboxApp {
-    reset: bool,
     files_to_parse: usize,
     max_files: usize,
+    auto_move_files: bool,
 
     status: String,
 }
@@ -46,10 +46,16 @@ impl SapInboxApp {
         }
     }
 
-    fn init(_cc: &eframe::CreationContext<'_>) -> Self {
+    fn init(cc: &eframe::CreationContext<'_>) -> Self {
+        let auto_move = match cc.storage {
+            Some(storage) => storage.get_string("auto_move").unwrap_or_default() == "true",
+            None => false
+        };
+
         Self {
             files_to_parse: 200,
             max_files: cnf_files::get_num_files().unwrap_or(MAX_FILES),
+            auto_move_files: auto_move,
 
             ..Default::default()
         }
@@ -88,7 +94,7 @@ impl SapInboxApp {
             for cnf_row in parse_file(f.path())? {
                 inbox
                     .iter_mut()
-                    .filter(|f| f.mark == cnf_row.mark)
+                    .filter(|f| **f == cnf_row)
                     .for_each(|f| f.set_confirmation_row_data(cnf_row.clone()));
             }
 
@@ -135,6 +141,16 @@ impl SapInboxApp {
             }
         }
 
+        let new_inbox: Vec<String> = inbox.iter()
+            .map(|f| f.new_inbox_text())
+            .filter(Option::is_some)
+            .map(Option::unwrap)
+            .collect();
+
+        if new_inbox.len() > 0 {
+            fs::write("new_inbox.txt", new_inbox.join("\n"))?;
+        }
+
         let prodfile = paths::timestamped_file("Production", "ready");
         let mut records: Vec<CnfFileRow> = Vec::new();
         inbox.iter_mut()
@@ -147,6 +163,9 @@ impl SapInboxApp {
             });
 
         write_file(records, prodfile.into())?;
+        if self.auto_move_files {
+            return self.move_prodfiles();
+        }
 
         Ok(())
     }
@@ -171,6 +190,10 @@ impl SapInboxApp {
 }
 
 impl eframe::App for SapInboxApp {
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        storage.set_string("auto_move", self.auto_move_files.to_string())
+    }
+
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::TopBottomPanel::bottom("<footer>")
             .show(ctx, |ui| {
@@ -217,7 +240,7 @@ impl eframe::App for SapInboxApp {
 
                     ui.collapsing("Options", |ui| {
 
-                        ui.checkbox(&mut self.reset, "Remove generated files");
+                        ui.checkbox(&mut self.auto_move_files, "Automatically move files after generation");
                         
                         ui.horizontal_centered(|ui| {
                             ui.label("Files to search");

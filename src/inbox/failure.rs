@@ -40,6 +40,7 @@ impl Failure {
         }
     }
 
+    /// Applies order to Failure without checking that it is a PlannedOrder
     pub fn apply_order_unchecked(&mut self, mut order_data: OrderData) -> Option<OrderData> {
         let failure_qty = self.qty();
 
@@ -102,12 +103,26 @@ impl Failure {
             return FailureMatchStatus::NoConfirmationRow;
         }
 
-        let diff = self.qty - self.qty();
+        let diff = self.qty();
         if diff > 0 {
             return FailureMatchStatus::NotEnoughOrdersApplied(diff);
         }
 
         FailureMatchStatus::MatchComplete
+    }
+
+    pub fn new_inbox_text(&self) -> Option<String> {
+        let qty = match self.status() {
+            FailureMatchStatus::MatchComplete => 0,
+            FailureMatchStatus::NoConfirmationRow => self.qty,
+            FailureMatchStatus::NotEnoughOrdersApplied(qty) => qty,
+        };
+
+        if qty == 0 {
+            return None;
+        }
+
+        Some(format!("Planned order not found for {}, {}, {}.000, Sigmanest Program:{}", self.mark, self.wbs, qty, self.program))
     }
 }
 
