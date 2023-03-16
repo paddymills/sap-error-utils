@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use eframe::{self, egui};
 
 use crate::api::Order;
+use crate::inbox::FailureMatchStatus;
 use crate::inbox::parsers::{parse_failures, parse_cohv};
 use crate::inbox::cnf_files::{self, get_last_n_files, parse_file};
 use crate::paths;
@@ -83,12 +84,23 @@ impl SapInboxApp {
         inbox.sort_by( |a, b| a.partial_cmp(b).unwrap() );
 
         // get confirmation file data
-        for f in get_last_n_files(self.files_to_parse) {
-            for cnf_row in parse_file(f) {
-                
+        for f in get_last_n_files(self.files_to_parse)? {
+            for cnf_row in parse_file(f.path())? {
+                inbox
+                    .iter_mut()
+                    .filter(|f| f.mark == cnf_row.mark)
+                    .for_each(|f| f.set_confirmation_row_data(cnf_row.clone()));
+            }
+
+            let has_confirmation_row = inbox
+                .iter()
+                .filter(|f| !f.has_confirmation_row())
+                .count();
+
+            if has_confirmation_row == 0 {
+                break;
             }
         }
-
 
         // get orders from cohv
         for order in parse_cohv(PathBuf::from("cohv.txt"))? {
@@ -111,13 +123,20 @@ impl SapInboxApp {
             }
         }
 
-        // print results
-        for failure in inbox {
-            println!("{}({})", failure.mark, failure.qty);
-            for order in failure.applied {
-                println!("\t{}: {}", order.wbs, order.qty);
+        for f in &inbox {
+            match f.status() {
+                FailureMatchStatus::NoConfirmationRow => {
+                    println!("No confirmation row for {} <{}, {}>", f.mark, f.wbs, f.program);
+                },
+                FailureMatchStatus::NotEnoughOrdersApplied(qty) => {
+                    println!("{}/{} not applied for {} <{}, {}>", qty, f.qty, f.mark, f.wbs, f.program);
+                },
+                _ => ()
             }
         }
+
+        let prodfile = paths::timestamped_file("Production", "ready");
+        
 
         Ok(())
     }
@@ -161,6 +180,9 @@ impl eframe::App for SapInboxApp {
                         };
                     }
                     if ui.button("Genereate confirmation file").clicked() {
+                        self.status = "generating confirmation file...".into();
+
+                        // TODO: move this to another thread because it takes a while
                         self.status = match self.generate_comparison() {
                             Ok(_) => "confirmation file generated".into(),
                             Err(e) => format!("Error generating confirmation file: {}", e)
@@ -172,6 +194,16 @@ impl eframe::App for SapInboxApp {
                             Err(e) => format!("Error moving files: {}", e)
                         };
                     }
+
+                    // TODO: progress bar
+                    // let progress = 0f64;
+                    // let progress_bar = egui::ProgressBar::new(progress)
+                    //     .show_percentage()
+                    //     .animate(*animate_progress_bar);
+                    // *animate_progress_bar = ui
+                    //     .add(progress_bar)
+                    //     .on_hover_text("The progress bar can be animated!")
+                    //     .hovered();
 
                     ui.collapsing("Options", |ui| {
 
@@ -197,5 +229,23 @@ impl eframe::App for SapInboxApp {
                     // TODO: fake terminal for logging
                 });
             });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SapInboxApp;
+
+    #[test]
+    fn comparison() {
+        let app = SapInboxApp {
+            files_to_parse: 1000,
+
+            ..Default::default()
+        };
+
+        if let Err(e) = app.generate_comparison() {
+            eprintln!("{}", e);
+        }
     }
 }
