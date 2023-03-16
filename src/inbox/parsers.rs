@@ -30,7 +30,7 @@ enum ParsingMode {
 }
 
 pub fn parse_cohv(cohv_file: PathBuf) -> io::Result<Vec<Order>> {
-    let data_row = Regex::new(r"(?:\|([\w ]+))+?\|")
+    let data_row = Regex::new(r"^(?:\|?[^\|]+)*\|$")
         .expect("Failed to build DATA_ROW regex");
 
     let mut results = Vec::new();
