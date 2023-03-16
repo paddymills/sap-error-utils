@@ -8,6 +8,7 @@ default-run = "test"
 
 [dependencies]
 anyhow = "1.0.69"
+calamine = "0.19.1"
 chrono = "0.4.23"
 csv = "1.2.0"
 eframe = { version = "0.21.3", features = ["persistence"] }
