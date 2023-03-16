@@ -10,6 +10,12 @@ lazy_static! {
         .expect("Failed to build INBOX_TEXT regex");
 }
 
+pub enum FailureMatchStatus {
+    MatchComplete,
+    NoConfirmationRow,
+    NotEnoughOrdersApplied(u32),
+}
+
 
 #[derive(Debug)]
 pub struct Failure {
@@ -59,6 +65,7 @@ impl Failure {
         }
     }
 
+    /// Returns the qty left to be applied
     pub fn qty(&self) -> u32 {
         let applied = self.applied
             .iter()
@@ -67,8 +74,12 @@ impl Failure {
         self.qty - applied
     }
 
-    pub fn set_confirmation_row_data(mut self, row: CnfFileRow) {
+    pub fn set_confirmation_row_data(&mut self, row: CnfFileRow) {
         self.cnf_row = Some(row);
+    }
+
+    pub fn has_confirmation_row(&self) -> bool {
+        self.cnf_row.is_some()
     }
 
     pub fn generate_output(self) -> Result<Vec<CnfFileRow>, String> {
@@ -84,6 +95,19 @@ impl Failure {
             },
             None => Err(format!("No CnfFileRow matched for {}", self.mark))
         }
+    }
+
+    pub fn status(&self) -> FailureMatchStatus {
+        if let None = self.cnf_row {
+            return FailureMatchStatus::NoConfirmationRow;
+        }
+
+        let diff = self.qty - self.qty();
+        if diff > 0 {
+            return FailureMatchStatus::NotEnoughOrdersApplied(diff);
+        }
+
+        FailureMatchStatus::MatchComplete
     }
 }
 

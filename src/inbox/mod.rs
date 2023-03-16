@@ -1,6 +1,6 @@
 
 mod failure;
-pub use failure::Failure;
+pub use failure::{Failure, FailureMatchStatus};
 
 pub mod cnf_files;
 
