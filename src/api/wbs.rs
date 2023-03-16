@@ -1,7 +1,7 @@
 
 use std::fmt::{Display, Debug};
 use regex::Regex;
-use serde::{Deserializer, de::Error};
+use serde::{Deserializer, de::Error, Serialize};
 
 lazy_static! {
     static ref COST_CENTER_WBS: Regex = Regex::new(r"S-.*-2-(2\d{3})").expect("Failed to build COST_CENTER_WBS regex");
@@ -9,7 +9,7 @@ lazy_static! {
     static ref LEGACY_WBS: Regex = Regex::new(r"S-(\d{7})-2-(\d{2})").expect("Failed to build LEGACY_WBS regex");
 }
 
-#[derive(Clone, Hash, PartialEq, PartialOrd, Deserialize, Serialize)]
+#[derive(Clone, Hash, PartialEq, PartialOrd, Deserialize)]
 pub enum Wbs {
     None,
     CostCenter { cc: u32 },
@@ -44,6 +44,14 @@ impl Wbs {
     {
         let s: &str = serde::de::Deserialize::deserialize(deserializer)?;
         Wbs::try_from(s).map_err(D::Error::custom)
+    }
+}
+
+impl Serialize for Wbs {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde::Serializer {
+        serializer.collect_str(self)
     }
 }
 
@@ -131,7 +139,7 @@ impl Display for Wbs {
             Self::CostCenter { cc            } => write!(f, "{}", cc),
             Self::Hd         { job, id       } => write!(f, "D-{}-{}", job, id),
             Self::Legacy     { job, shipment } => write!(f, "S-{}-{}", job, shipment),
-            Self::None                         => write!(f, "<No Wbs>"),
+            Self::None                         => write!(f, ""),
         }
     }
 }
