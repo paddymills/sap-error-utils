@@ -82,12 +82,12 @@ impl Failure {
         self.cnf_row.is_some()
     }
 
-    pub fn generate_output(self) -> Result<Vec<CnfFileRow>, String> {
-        match self.cnf_row {
+    pub fn generate_output(&self) -> Result<Vec<CnfFileRow>, String> {
+        match &self.cnf_row {
             Some(row) => {
                 let mut result = Vec::new();
                 
-                for appl in self.applied {
+                for appl in &self.applied {
                     result.push(row.modify_with(appl));
                 }
         

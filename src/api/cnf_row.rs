@@ -65,13 +65,13 @@ impl CnfFileRow {
         self.matl_qty / self.part_qty as f64
     }
 
-    pub fn modify_with(&self, order: OrderData) -> Self {
+    pub fn modify_with(&self, order: &OrderData) -> Self {
         let mut result = self.clone();
 
-        result.part_wbs = order.wbs;
+        result.part_wbs = order.wbs.clone();
         result.part_qty = order.qty as u64;
         result.matl_qty = self.area_per_ea() * order.qty as f64;
-        result.plant = order.plant;
+        result.plant = order.plant.clone();
 
         result
     }
