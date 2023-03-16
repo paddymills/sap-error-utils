@@ -36,7 +36,7 @@ impl Header {
             id:    split_row[self.order].parse().unwrap(),
             mark:  split_row[self.mark].into(),
             qty:   split_row[self.qty].parse().unwrap(),
-            wbs:   split_row[self.wbs].into(),
+            wbs:   split_row[self.wbs].try_into().unwrap(),
             plant: split_row[self.plant].into(),
         };
 

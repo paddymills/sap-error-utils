@@ -74,7 +74,8 @@ pub struct IssueFileRow {
     /// Material master
     pub matl:     String,
     /// Material WBS Element
-    pub matl_wbs: Option<Wbs>,
+    // pub matl_wbs: Option<Wbs>,
+    pub matl_wbs: Wbs,
     /// Material quantity
     #[serde(serialize_with="three_digit_f64")]
     pub matl_qty: f64,
@@ -132,9 +133,13 @@ fn infer_codes(row: &CnfFileRow) -> (IssueCode, String, String) {
     let (user1, user2) = match &row.part_wbs {
         Wbs::CostCenter { cc } => {
             // cost center issuing
+            // let code = match &row.matl_wbs {
+            //     Some(_) => IssueCode::CostCenterFromProject,
+            //     None => IssueCode::CostCenterFromStock
+            // };
             let code = match &row.matl_wbs {
-                Some(_) => IssueCode::CostCenterFromProject,
-                None => IssueCode::CostCenterFromStock
+                Wbs::None => IssueCode::CostCenterFromStock,
+                _ => IssueCode::CostCenterFromProject,
             };
         
             // cost center
@@ -151,21 +156,35 @@ fn infer_codes(row: &CnfFileRow) -> (IssueCode, String, String) {
         Wbs::Legacy { job, shipment } => {
             (format!("D-{}", job), format!("{:02}", shipment))
         },
+        Wbs::None => unreachable!()
     };
 
     if PROD_JOB.is_match(&row.job) {
+        // let code = match &row.matl_wbs {
+        //     // project stock material
+        //     Some(wbs) => {
+        //         // part and material have the same project
+        //         if wbs.to_string().starts_with(&user1) { IssueCode::ProjectFromProject }
+    
+        //         // part and material have different projects
+        //         else { IssueCode::ProjectFromOtherProject }
+        //     },
+    
+        //     // plant stock material
+        //     None => IssueCode::ProjectFromStock
+        // };
         let code = match &row.matl_wbs {
+            // plant stock material
+            Wbs::None => IssueCode::ProjectFromStock,
+            
             // project stock material
-            Some(wbs) => {
+            wbs => {
                 // part and material have the same project
                 if wbs.to_string().starts_with(&user1) { IssueCode::ProjectFromProject }
     
                 // part and material have different projects
                 else { IssueCode::ProjectFromOtherProject }
             },
-    
-            // plant stock material
-            None => IssueCode::ProjectFromStock
         };
 
         return (code, user1, user2)
@@ -191,13 +210,13 @@ mod tests {
         CnfFileRow {
             mark: "1210123A-X1A".into(),
             job: "S-1210123".into(),
-            part_wbs: "S-1210123-2-10".into(),
+            part_wbs: "S-1210123-2-10".try_into().unwrap(),
             part_loc: "PROD".into(),
             part_qty: 5u64,
             part_uom: "EA".into(),
             
             matl: "50W-0008".into(),
-            matl_wbs: None,
+            matl_wbs: Wbs::None,
             matl_qty: 1_001.569f64,
             matl_uom: "IN2".into(),
             matl_loc: Some("K2".into()),
@@ -238,7 +257,8 @@ mod tests {
     #[test]
     fn infer_project_from_project() {
         let mut row = get_test_row();
-        row.matl_wbs = Some("D-1210123-10004".into());
+        // row.matl_wbs = Some("D-1210123-10004".into());
+        row.matl_wbs = "D-1210123-10004".try_into().unwrap();
 
         let (c, ..) = infer_codes(&row);
         assert_eq!(c, IssueCode::ProjectFromProject);
@@ -247,7 +267,8 @@ mod tests {
     #[test]
     fn infer_project_from_other_project() {
         let mut row = get_test_row();
-        row.matl_wbs = Some("D-1200248-10004".into());
+        // row.matl_wbs = Some("D-1200248-10004".into());
+        row.matl_wbs = "D-1210123-10004".try_into().unwrap();
 
         let (c, ..) = infer_codes(&row);
 
@@ -258,7 +279,7 @@ mod tests {
     fn infer_cost_center_stock() {
         let mut row = get_test_row();
         // row.job = "D-HSU".into();
-        row.part_wbs = "S-HSU-2-2062".into();
+        row.part_wbs = "S-HSU-2-2062".try_into().unwrap();
 
         let (c, ..) = infer_codes(&row);
 
@@ -269,8 +290,8 @@ mod tests {
     fn infer_cost_center_project() {
         let mut row = get_test_row();
         // row.job = "D-HSU".into();
-        row.part_wbs = "S-HSU-2-2062".into();
-        row.matl_wbs = Some("D-1200248-10004".into());
+        row.part_wbs = "S-HSU-2-2062".try_into().unwrap();
+        row.matl_wbs = "D-1200248-10004".try_into().unwrap();
 
         let (c, ..) = infer_codes(&row);
 

@@ -19,6 +19,7 @@ pub struct CnfFileRow {
     /// Job number (without structure) in the format `S-{job}`
     pub job:      String,
     /// WBS element for part
+    #[serde(deserialize_with="Wbs::deserialize")]
     pub part_wbs: Wbs,
     /// Location for part (PROD)
     pub part_loc: String,
@@ -30,7 +31,9 @@ pub struct CnfFileRow {
     /// Material master
     pub matl:     String,
     /// Material WBS Element
-    pub matl_wbs: Option<Wbs>,
+    #[serde(deserialize_with="Wbs::deserialize")]
+    // pub matl_wbs: Option<Wbs>,
+    pub matl_wbs: Wbs,
     /// Material quantity
     ///
     /// This is the amount consumed for all parts.

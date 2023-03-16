@@ -1,6 +1,7 @@
 
 use std::fmt::{Display, Debug};
 use regex::Regex;
+use serde::{Deserializer, de::Error};
 
 lazy_static! {
     static ref COST_CENTER_WBS: Regex = Regex::new(r"S-.*-2-(2\d{3})").expect("Failed to build COST_CENTER_WBS regex");
@@ -10,6 +11,7 @@ lazy_static! {
 
 #[derive(Clone, Hash, PartialEq, PartialOrd, Deserialize, Serialize)]
 pub enum Wbs {
+    None,
     CostCenter { cc: u32 },
     Hd { job: String, id: u32 },
     Legacy { job: String, shipment: u32 },
@@ -22,6 +24,7 @@ impl Wbs {
 
             Self::CostCenter { .. } => panic!("Cannot assign an Id to a CostCenter Wbs"),
             Self::Legacy { .. } => panic!("Cannot assign an Id to a Legacy Wbs"),
+            Self::None => panic!("Cannot assign Id to no Wbs")
         }
     }
 
@@ -31,48 +34,94 @@ impl Wbs {
             Self::Legacy { job, shipment: _ } => Self::Hd { job, id },
 
             Self::CostCenter { .. } => panic!("Cannot convert CostCenter Wbs to an HD Wbs"),
+            Self::None => Self::None
         }
         
     }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Wbs, D::Error>
+        where D: Deserializer<'de>
+    {
+        let s: &str = serde::de::Deserialize::deserialize(deserializer)?;
+        Wbs::try_from(s).map_err(D::Error::custom)
+    }
 }
 
-impl From<&str> for Wbs {
-    fn from(value: &str) -> Self {
+// impl From<&str> for Wbs {
+//     fn from(value: &str) -> Self {
+//         if value == "" {
+//             return Self::None;
+//         }
+
+//         if let Some(caps) = COST_CENTER_WBS.captures(value) {
+//             Self::CostCenter {
+//                 cc: caps.get(1).unwrap().as_str().parse().unwrap()
+//             }
+//         }
+
+//         else if let Some(caps) = HD_WBS.captures(value) {
+//             Self::Hd {
+//                 job: caps.get(1).unwrap().as_str().into(),
+//                 id: caps.get(2).unwrap().as_str().parse().unwrap()
+//             }
+//         }
+        
+//         else if let Some(caps) = LEGACY_WBS.captures(value) {
+//             Self::Legacy {
+//                 job: caps.get(1).unwrap().as_str().into(),
+//                 shipment: caps.get(2).unwrap().as_str().parse().unwrap()
+//             }
+//         }
+
+//         else {
+//             panic!("Failed to parse WBS <{}>", value);
+//         }
+//     }
+// }
+
+impl TryFrom<&str> for Wbs {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        if value == "" {
+            return Ok(Self::None);
+        }
+
         if let Some(caps) = COST_CENTER_WBS.captures(value) {
-            Self::CostCenter {
+            Ok(Self::CostCenter {
                 cc: caps.get(1).unwrap().as_str().parse().unwrap()
-            }
+            })
         }
 
         else if let Some(caps) = HD_WBS.captures(value) {
-            Self::Hd {
+            Ok(Self::Hd {
                 job: caps.get(1).unwrap().as_str().into(),
                 id: caps.get(2).unwrap().as_str().parse().unwrap()
-            }
+            })
         }
         
         else if let Some(caps) = LEGACY_WBS.captures(value) {
-            Self::Legacy {
+            Ok(Self::Legacy {
                 job: caps.get(1).unwrap().as_str().into(),
                 shipment: caps.get(2).unwrap().as_str().parse().unwrap()
-            }
+            })
         }
 
         else {
-            panic!("Failed to parse WBS <{}>", value);
+            Err(format!("Failed to parse WBS <{}>", value))
         }
     }
 }
 
 impl From<String> for Wbs {
     fn from(value: String) -> Self {
-        Self::from( value.as_str() )
+        Self::try_from( value.as_str() ).unwrap()
     }
 }
 
 impl From<regex::Match<'_>> for Wbs {
     fn from(value: regex::Match) -> Self {
-        Self::from( value.as_str() )
+        Self::try_from( value.as_str() ).unwrap()
     }
 }
 
@@ -82,6 +131,7 @@ impl Display for Wbs {
             Self::CostCenter { cc            } => write!(f, "{}", cc),
             Self::Hd         { job, id       } => write!(f, "D-{}-{}", job, id),
             Self::Legacy     { job, shipment } => write!(f, "S-{}-{}", job, shipment),
+            Self::None                         => write!(f, "<No Wbs>"),
         }
     }
 }
@@ -92,6 +142,7 @@ impl Debug for Wbs {
             Self::CostCenter { .. } => write!(f, "CostCenter <{}>", self),
             Self::Hd         { .. } => write!(f, "Hd <{}>", self),
             Self::Legacy     { .. } => write!(f, "Legacy <{}>", self),
+            Self::None              => write!(f, "<No Wbs>"),
         }
     }
 }
