@@ -1,6 +1,7 @@
 
-use std::path::PathBuf;
+use std::{path::PathBuf, collections::HashMap};
 
+use calamine::DataType;
 pub use sap_error_utils::excel::*;
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -58,6 +59,40 @@ impl PartialEq<String> for ExampleHeader {
     }
 }
 
+#[derive(Debug)]
+struct ExampleRow {
+    order: String,
+    matl: String,
+    qty: u32,
+    wbs: String
+}
+
+impl XlsxRow<ExampleHeader> for ExampleRow {
+    fn parse_row(row: HashMap<&ExampleHeader, &DataType>) -> Self
+    {
+        let order = row.get(&ExampleHeader::Order).unwrap().get_string().unwrap().into();
+        // let order = match row.get(&ExampleHeader::Order) {
+        //     Some(DataType::String(s)) => s.into(),
+        //     _ => String::new()
+        // };
+        let matl = match row.get(&ExampleHeader::Matl) {
+            Some(DataType::String(s)) => s.into(),
+            _ => String::new()
+        };
+        let qty = match row.get(&ExampleHeader::Qty) {
+            Some(DataType::Int(i)) => *i as u32,
+            _ => 0u32
+        };
+        let wbs = match row.get(&ExampleHeader::Wbs) {
+            Some(DataType::String(s)) => s.into(),
+            _ => String::new()
+        };
+
+
+        Self { order, matl, qty, wbs }
+    }
+}
+
 fn main() -> std::io::Result<()> {
 
     let userprofile = match std::env::var_os("USERPROFILE") {
@@ -69,7 +104,9 @@ fn main() -> std::io::Result<()> {
 
     let mut reader = XlsxTableReader::new();
     reader.set_header(ExampleHeader::all());
-    reader.read_file(path);
+    for row in reader.read_file::<ExampleRow>(path) {
+        println!("{:?}", row);
+    }
 
     Ok(())
 }

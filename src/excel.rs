@@ -10,13 +10,13 @@ use calamine::{Reader, open_workbook, Xlsx, DataType};
 // TODO: use serde for this.
 
 #[derive(Debug, Default)]
-pub struct XlsxTableReader<T: HeaderColumn> {
-    header: HashMap<T, Option<usize>>
+pub struct XlsxTableReader<H: HeaderColumn> {
+    header: HashMap<H, Option<usize>>
 }
 
-impl<T> XlsxTableReader<T>
+impl<H> XlsxTableReader<H>
     where
-        T: HeaderColumn + Eq + Hash
+        H: HeaderColumn + Eq + Hash
 {
     pub fn new() -> Self {
         Self {
@@ -24,7 +24,7 @@ impl<T> XlsxTableReader<T>
         }
     }
 
-    pub fn set_header(&mut self, header: Vec<T>) {
+    pub fn set_header(&mut self, header: Vec<H>) {
         self.header.extend(
             header
                 .into_iter()
@@ -32,9 +32,11 @@ impl<T> XlsxTableReader<T>
         );
     }
 
-    pub fn read_file(&mut self, path: PathBuf) {
+    pub fn read_file<R>(&mut self, path: PathBuf) -> Vec<R>
+        where
+            R: XlsxRow<H>
+    {
         let mut wb: Xlsx<_> = open_workbook(path).expect("Cannot open file");
-        
         
         if let Some(Ok(rng)) = wb.worksheet_range("Sheet1") {
             let mut rows = rng.rows();
@@ -62,15 +64,31 @@ impl<T> XlsxTableReader<T>
                     panic!("Not all header columns matched!")
                 }
 
+            let mut results: Vec<R> = Vec::new();
             for row in rows {
-                for (k, v) in &self.header {
-                    print!("| {}: {} ", k.column_name(), row[v.unwrap()])
-                }
-                println!("|")
-                // println!("{:?}", row);
+                let vals = self.header.iter()
+                    .map( |(k,v)| (k.clone(), &row[v.unwrap()]) )
+                    .collect();
+                results.push(R::parse_row(vals));
             }
+
+            return results;
         }
+
+        // TODO: handle failure
+        Vec::new()
     }
+}
+
+pub trait HeaderColumnNew {
+    // header impls
+    //  - header column match (maybe TryFrom)
+    //  - all columns matched
+    type Header;
+    type XlRow;
+
+    fn parse_header(&self, row: &[DataType]) -> Result<(), String>;
+    fn parse_row(&self, row: &[DataType]) -> Self::XlRow;
 }
 
 pub trait HeaderColumn {
@@ -80,4 +98,8 @@ pub trait HeaderColumn {
     fn matches_column_name(&self, name: &String) -> bool {
         &self.column_text() == name
     }
+}
+
+pub trait XlsxRow<H: HeaderColumn> {
+    fn parse_row(row: HashMap<&H, &DataType>) -> Self;
 }
