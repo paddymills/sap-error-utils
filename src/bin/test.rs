@@ -30,10 +30,6 @@ impl HeaderColumn for ExampleHeader {
             Plant => "Plant"
         }.into()
     }
-    
-    fn column_text (&self) -> String {
-        self.to_string()
-    }
 
     fn columns_to_match() -> Vec<Self> where Self: Sized {
         vec![

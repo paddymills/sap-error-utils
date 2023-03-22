@@ -7,7 +7,7 @@ use eframe::{self, egui};
 
 use crate::api::{Order, CnfFileRow};
 use crate::inbox::FailureMatchStatus;
-use crate::inbox::parsers::{parse_failures, parse_cohv};
+use crate::inbox::parsers::{parse_failures, parse_cohv_xl};
 use crate::inbox::cnf_files::{self, get_last_n_files, parse_file, write_file};
 use crate::paths;
 
@@ -83,7 +83,7 @@ impl SapInboxApp {
         Ok(())
     }
 
-    pub fn generate_comparison(&self) -> io::Result<()> {
+    pub fn generate_comparison(&self) -> anyhow::Result<()> {
         // parse inbox
         let file = PathBuf::from(INPUT_FILENAME);
         let mut inbox = parse_failures(file)?;
@@ -109,7 +109,14 @@ impl SapInboxApp {
         }
 
         // get orders from cohv
-        for order in parse_cohv(PathBuf::from("cohv.txt"))? {
+        let userprofile = match std::env::var_os("USERPROFILE") {
+            Some(path) => path,
+            None => panic!("Could not locate env variable `USERPROFILE`")
+        };
+    
+        let path = PathBuf::from(format!("{}/Documents/SAP/SAP GUI/cohv.xlsx", userprofile.to_str().unwrap()));
+    
+        for order in parse_cohv_xl(PathBuf::from(path))? {
             match order {
                 Order::PlannedOrder(mut data) => {
                     'inbox: for failure in &mut inbox {
@@ -164,7 +171,7 @@ impl SapInboxApp {
 
         write_file(records, prodfile.into())?;
         if self.auto_move_files {
-            return self.move_prodfiles();
+            self.move_prodfiles()?;
         }
 
         Ok(())

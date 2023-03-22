@@ -53,10 +53,10 @@ impl<H> XlsxTableReader<H>
         }
     }
 
-    pub fn read_file(&mut self, path: PathBuf) -> Result<Vec<H::Row>, String> {
+    pub fn read_file(&mut self, path: PathBuf) -> Result<Vec<H::Row>, &'static str> {
         let mut wb: Xlsx<_> = match open_workbook(path) {
             Ok(wb) => wb,
-            Err(_) => return Err("failed ot open file".into())
+            Err(_) => return Err("failed ot open file")
         };
         
         let rng = &wb.worksheets()[0].1;
@@ -66,9 +66,9 @@ impl<H> XlsxTableReader<H>
 
         // validate header matched 
         if !self.is_header_matched() {
-                // TODO: specify which header columns not matched
-                panic!("Not all header columns matched!")
-            }
+            // TODO: specify which header columns not matched
+            return Err("Not all header columns matched!");
+        }
 
         let mut results = Vec::new();
         for row in rows {
@@ -85,14 +85,7 @@ pub trait HeaderColumn {
     type Row;
 
     fn column_name(&self) -> String;
-    fn column_text(&self) -> String;
-
     fn match_header_column(column_text: &str) -> Option<Self> where Self: Sized;
     fn columns_to_match() -> Vec<Self> where Self: Sized;
-
-    fn matches_column_name(&self, name: &String) -> bool {
-        &self.column_text() == name
-    }
-
     fn parse_row(header: &HashMap<Self, usize>, row: &[DataType]) -> Self::Row where Self: Sized;
 }
