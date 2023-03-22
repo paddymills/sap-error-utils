@@ -11,7 +11,7 @@ use calamine::{Reader, open_workbook, Xlsx, DataType};
 
 #[derive(Debug, Default)]
 pub struct XlsxTableReader<H: HeaderColumn> {
-    header: HashMap<H, Option<usize>>
+    header: HashMap<H, usize>
 }
 
 impl<H> XlsxTableReader<H>
@@ -24,101 +24,75 @@ impl<H> XlsxTableReader<H>
         }
     }
 
-    pub fn set_header(&mut self, header: Vec<H>) {
-        self.header.extend(
-            header
-                .into_iter()
-                .map(|h| (h, None))
-        );
-    }
-
     fn is_header_matched(&self) -> bool {
-        match self.header
-            .iter()
-            .filter(|(_, v)| v.is_none())
-            .count() {
-                0 => true,
-                _ => false
+        let mut cols = H::columns_to_match();
+
+        let mut not_matched = Vec::new();
+        while let Some(col) = cols.pop() {
+            if !self.header.contains_key(&col) {
+                not_matched.push(col)
             }
+        }
+
+        // TODO: return list of columns not matched
+        if not_matched.len() > 0 {
+            panic!("not all columns matched");
+        }
+
+        true
     }
 
-    pub fn get_row_value(&self, index: &H, row: &[DataType]) -> DataType {
-        match self.header.get(index) {
-            Some(Some(key)) => row[*key].clone(),
-            _ => panic!("index {:?} not in header", index.column_name())
+    pub fn parse_header(&mut self, row: &[DataType]) {
+        // TODO: multi-line header
+        for (i, col) in row.iter().enumerate() {
+            if let Some(key) = H::match_header_column(col.get_string().unwrap()) {
+                self.header.insert(key, i);
+            }
+
+            // TODO: break if all columns matched
         }
     }
 
-    pub fn read_file<R>(&mut self, path: PathBuf) -> Vec<R>
-        where
-            R: XlsxRow<H>
-    {
-        let mut wb: Xlsx<_> = open_workbook(path).expect("Cannot open file");
+    pub fn read_file(&mut self, path: PathBuf) -> Result<Vec<H::Row>, String> {
+        let mut wb: Xlsx<_> = match open_workbook(path) {
+            Ok(wb) => wb,
+            Err(_) => return Err("failed ot open file".into())
+        };
         
-        if let Some(Ok(rng)) = wb.worksheet_range("Sheet1") {
-            let mut rows = rng.rows();
-            
-            // TODO: multi-line header
-            for (i, col) in rows.next().expect("Cannot read an empty sheet").iter().enumerate() {
-                if let DataType::String(s) = col {
-                    for (k, v) in self.header.iter_mut() {
-                        if let None = v {
-                            if k.matches_column_name(s) {
-                                *v = Some(i);
-                                break;
-                            }
-                        }
-                    }
-                }
+        let rng = &wb.worksheets()[0].1;
+        let mut rows = rng.rows().into_iter();
+
+        self.parse_header(rows.next().unwrap());
+
+        // validate header matched 
+        if !self.is_header_matched() {
+                // TODO: specify which header columns not matched
+                panic!("Not all header columns matched!")
             }
 
-            // validate header matched 
-            if !self.is_header_matched() {
-                    // TODO: specify which header columns not matched
-                    panic!("Not all header columns matched!")
-                }
-
-            let mut results: Vec<R> = Vec::new();
-            for row in rows {
-                let vals = self.header.iter()
-                    .map( |(k,v)| (k.clone(), &row[v.unwrap()]) )
-                    .collect();
-                results.push(R::parse_row(vals));
-            }
-
-            return results;
+        let mut results = Vec::new();
+        for row in rows {
+            results.push(H::parse_row(&self.header, row));
         }
 
-        // TODO: handle failure
-        Vec::new()
+        return Ok(results);
+
+        // Err(String::from("Failed to open first worksheet"))
     }
-}
-
-pub trait RowParser {
-    // two part tool to parse a table
-    //  - Header column matching enum
-    //  - Row serializing struct
-
-    // header impls
-    //  - header column match (maybe TryFrom)
-    //  - all columns matched
-    type Header;
-    type XlRow;
-
-    fn parse_header(&self, row: &[DataType]) -> Result<(), String>;
-    fn match_header_column(column_text: &String) -> Option<Self::Header>;
-    fn parse_row(&self, row: &[DataType]) -> Self::XlRow;
 }
 
 pub trait HeaderColumn {
+    type Row;
+
     fn column_name(&self) -> String;
     fn column_text(&self) -> String;
+
+    fn match_header_column(column_text: &str) -> Option<Self> where Self: Sized;
+    fn columns_to_match() -> Vec<Self> where Self: Sized;
 
     fn matches_column_name(&self, name: &String) -> bool {
         &self.column_text() == name
     }
-}
 
-pub trait XlsxRow<H: HeaderColumn> {
-    fn parse_row(row: HashMap<&H, &DataType>) -> Self;
+    fn parse_row(header: &HashMap<Self, usize>, row: &[DataType]) -> Self::Row where Self: Sized;
 }
