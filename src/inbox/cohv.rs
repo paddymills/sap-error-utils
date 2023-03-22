@@ -69,12 +69,12 @@ impl TryFrom<String> for Header {
 
         // validate that all columns matched
         let mut missing_columns = Vec::new();
-        if head._type == usize::default() { missing_columns.push("`Order Type`" ); }
-        if head.order == usize::default() { missing_columns.push("`Order`"      ); }
-        if head.mark  == usize::default() { missing_columns.push("`Material`"   ); }
-        if head.qty   == usize::default() { missing_columns.push("`Target Qty`" ); }
-        if head.wbs   == usize::default() { missing_columns.push("`WBS Element`"); }
-        if head.plant == usize::default() { missing_columns.push("`Plant`"      ); }
+        if head._type == usize::MAX { missing_columns.push("`Order Type`" ); }
+        if head.order == usize::MAX { missing_columns.push("`Order`"      ); }
+        if head.mark  == usize::MAX { missing_columns.push("`Material`"   ); }
+        if head.qty   == usize::MAX { missing_columns.push("`Target Qty`" ); }
+        if head.wbs   == usize::MAX { missing_columns.push("`WBS Element`"); }
+        if head.plant == usize::MAX { missing_columns.push("`Plant`"      ); }
         if missing_columns.len() > 0 {
             return Err(format!("Failed to parse header: missing columns {:?}", missing_columns));
         }
