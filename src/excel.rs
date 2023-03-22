@@ -17,6 +17,7 @@ pub struct XlsxTableReader<H: HeaderColumn> {
 impl<H> XlsxTableReader<H>
     where
         H: HeaderColumn + Eq + Hash
+{
     pub fn new() -> Self {
         Self {
             header: HashMap::new(),
