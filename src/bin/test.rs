@@ -89,7 +89,8 @@ impl XlsxRow<ExampleHeader> for ExampleRow {
         };
 
 
-        Self { order, matl, qty, wbs }
+        Self { 
+            order, matl, qty, wbs }
     }
 }
 
