@@ -3,3 +3,5 @@
 
 # generated files
 parts.txt
+new_inbox.txt
+*.ready
