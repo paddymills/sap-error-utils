@@ -35,11 +35,7 @@ impl<H> XlsxTableReader<H>
         }
 
         // TODO: return list of columns not matched
-        if not_matched.len() > 0 {
-            panic!("not all columns matched");
-        }
-
-        true
+        not_matched.len() == 0
     }
 
     pub fn parse_header(&mut self, row: &[DataType]) {
