@@ -18,7 +18,7 @@ regex = "1.7.1"
 serde = { version = "1.0", features = ["derive"] }
 
 [[bin]]
-name = "inbox"
+name = "inbox_errors"
 
 [[bin]]
 name = "test"
