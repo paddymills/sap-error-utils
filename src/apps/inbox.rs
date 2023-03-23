@@ -40,8 +40,6 @@ impl SapInboxApp {
             centered: true,
             default_theme: eframe::Theme::Light,
 
-            max_window_size: Some([300., 200.].into()),
-
             ..Default::default()
         }
     }
@@ -83,7 +81,7 @@ impl SapInboxApp {
         Ok(())
     }
 
-    pub fn generate_comparison(&self) -> anyhow::Result<()> {
+    pub fn generate_comparison(&mut self) -> anyhow::Result<()> {
         // parse inbox
         let file = PathBuf::from(INPUT_FILENAME);
         let mut inbox = parse_failures(file)?;
@@ -114,7 +112,12 @@ impl SapInboxApp {
             None => panic!("Could not locate env variable `USERPROFILE`")
         };
     
-        let path = PathBuf::from(format!("{}/Documents/SAP/SAP GUI/cohv.xlsx", userprofile.to_str().unwrap()));
+        let path = PathBuf::from(format!("{}/Documents/SAP/SAP GUI/export.xlsx", userprofile.to_str().unwrap()));
+
+        if !path.exists() {
+            self.status = format!("Could not locate export file {}", path.display());
+            return Ok(());
+        }
     
         for order in parse_cohv_xl(PathBuf::from(path))? {
             match order {
@@ -278,7 +281,7 @@ mod tests {
 
     #[test]
     fn comparison() {
-        let app = SapInboxApp {
+        let mut app = SapInboxApp {
             files_to_parse: 1000,
 
             ..Default::default()
