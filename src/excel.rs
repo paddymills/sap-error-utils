@@ -24,28 +24,32 @@ impl<H> XlsxTableReader<H>
         }
     }
 
-    fn is_header_matched(&self) -> bool {
-        let mut cols = H::columns_to_match();
+    fn not_matched_header(&self) -> Option<Vec<String>> {
+        let not_matched: Vec<String> = H::columns_to_match()
+            .into_iter()
+            .filter(|col| !self.header.contains_key(col))
+            .map(|h| h.column_name())
+            .collect();
 
-        let mut not_matched = Vec::new();
-        while let Some(col) = cols.pop() {
-            if !self.header.contains_key(&col) {
-                not_matched.push(col)
-            }
+        match not_matched.len() {
+            0 => None,
+            _ => Some(not_matched)
         }
+    }
 
-        // TODO: return list of columns not matched
-        not_matched.len() == 0
+    fn is_header_matched(&self) -> bool {
+        self.not_matched_header().is_none()
     }
 
     pub fn parse_header(&mut self, row: &[DataType]) {
-        // TODO: multi-line header
         for (i, col) in row.iter().enumerate() {
             if let Some(key) = H::match_header_column(col.get_string().unwrap()) {
                 self.header.insert(key, i);
             }
 
-            // TODO: break if all columns matched
+            if self.is_header_matched() {
+                break;
+            }
         }
     }
 
