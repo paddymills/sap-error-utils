@@ -4,7 +4,7 @@ use regex::Regex;
 
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{self, BufRead, ErrorKind};
+use std::io::{self, BufRead};
 use std::path::PathBuf;
 
 use crate::api::{Order, OrderData};
@@ -103,6 +103,8 @@ impl HeaderColumn for CohvHeader {
             "Material Number"        => Some( Self::Matl  ),
             "Order quantity (GMEIN)" => Some( Self::Qty   ),
             "WBS Element"            => Some( Self::Wbs   ),
+            "Order Type"             => Some( Self::Type  ),
+            "Plant"                  => Some( Self::Plant ),
             _                        => None
         }
     }
@@ -111,7 +113,7 @@ impl HeaderColumn for CohvHeader {
         where Self: Sized
     {
         // TODO: handle parsing errors (get_string/get_int)
-        let order = row[*header.get(&Self::Order).unwrap()].get_float().unwrap() as u32;
+        let order = row[*header.get(&Self::Order).unwrap()].get_string().unwrap().parse().unwrap();
         let matl  = row[*header.get(&Self::Matl).unwrap() ].get_string().unwrap().into();
         let qty   = row[*header.get(&Self::Qty).unwrap()  ].get_float().unwrap() as u32;
         let wbs   = row[*header.get(&Self::Wbs).unwrap()  ].get_string().unwrap().try_into().unwrap();
