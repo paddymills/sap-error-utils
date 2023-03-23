@@ -53,10 +53,10 @@ impl<H> XlsxTableReader<H>
         }
     }
 
-    pub fn read_file(&mut self, path: PathBuf) -> Result<Vec<H::Row>, &'static str> {
+    pub fn read_file(&mut self, path: PathBuf) -> Result<Vec<H::Row>, String> {
         let mut wb: Xlsx<_> = match open_workbook(path) {
             Ok(wb) => wb,
-            Err(_) => return Err("failed ot open file")
+            Err(_) => return Err("failed ot open file".into())
         };
         
         let rng = &wb.worksheets()[0].1;
@@ -65,9 +65,9 @@ impl<H> XlsxTableReader<H>
         self.parse_header(rows.next().unwrap());
 
         // validate header matched 
-        if !self.is_header_matched() {
+        if let Some(cols) = self.not_matched_header() {
             // TODO: specify which header columns not matched
-            return Err("Not all header columns matched!");
+            return Err(format!("Not all header columns matched. Missing columns: `{}`", cols.join(", ")));
         }
 
         let mut results = Vec::new();
