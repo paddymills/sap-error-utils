@@ -11,20 +11,10 @@ use crate::api::{Order, OrderData};
 use crate::excel::{XlsxTableReader, HeaderColumn};
 use super::{Failure, cohv::Header};
 
-pub fn parse_failures(path: PathBuf) -> io::Result<Vec<Failure>> {
-    let mut results = Vec::new();
-
-    let file = File::open(path)?;
-    let reader = io::BufReader::new(file);
-
-    for line in reader.lines() {
-        match Failure::try_from(line?) {
-            Ok(f) => results.push(f),
-            Err(e) => eprintln!("{}", e)
-        }
-    }
-
-    Ok(results)
+pub fn parse_failures(failures: impl Iterator<Item = impl ToString>) -> Vec<anyhow::Result<Failure>> {
+    failures
+        .map(|f| Failure::try_from(f.to_string()))
+        .collect()
 }
 
 enum ParsingMode {
@@ -109,25 +99,31 @@ impl HeaderColumn for CohvHeader {
         }
     }
 
-    fn parse_row(header: &HashMap<Self, usize>, row: &[DataType]) -> Self::Row
+    fn parse_row(header: &HashMap<Self, usize>, row: &[DataType]) -> anyhow::Result<Self::Row>
         where Self: Sized
     {
         // TODO: handle parsing errors (get_string/get_int)
-        let order = row[*header.get(&Self::Order).unwrap()].get_string().unwrap().parse().unwrap();
-        let matl  = row[*header.get(&Self::Matl).unwrap() ].get_string().unwrap().into();
-        let qty   = row[*header.get(&Self::Qty).unwrap()  ].get_float().unwrap() as u32;
-        let wbs   = row[*header.get(&Self::Wbs).unwrap()  ].get_string().unwrap().try_into().unwrap();
-        let _type = row[*header.get(&Self::Type).unwrap() ].get_string().unwrap();
-        let plant = row[*header.get(&Self::Plant).unwrap()].get_string().unwrap().into();
+        let order = row[*header.get(&Self::Order).unwrap()].get_string().ok_or( anyhow!("Failed to coerce order to String") )?.parse()?;
+
+        let matl  = row[*header.get(&Self::Matl).unwrap() ].get_string().ok_or( anyhow!("Failed to read Material as String") )?.into();
+        let qty   = row[*header.get(&Self::Qty).unwrap()  ].get_float() .ok_or( anyhow!("Failed to read qty as Float") )? as u32;
+        let wbs   = row[*header.get(&Self::Wbs).unwrap()  ].get_string().ok_or( anyhow!("Failed to read Wbs Element") )?.try_into()?;
+        let _type = row[*header.get(&Self::Type).unwrap() ].get_string().ok_or( anyhow!("Failed to read Order Type") )?;
+        let plant = row[*header.get(&Self::Plant).unwrap()].get_string().ok_or( anyhow!("Failed to read Plant") )?.into();
 
         let data = OrderData { id: order, mark: matl, qty, wbs, plant };
 
-        Order::new(_type, data)
+        Ok( Order::new(_type, data) )
     }
 }
 
 pub fn parse_cohv_xl(cohv_file: PathBuf) -> anyhow::Result<Vec<Order>> {
     
     let mut reader = XlsxTableReader::<CohvHeader>::new();
-    reader.read_file(cohv_file).map_err(anyhow::Error::msg)
+    let vals = reader.read_file(cohv_file)?
+        .into_iter()
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(vals)
 }

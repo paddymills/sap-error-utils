@@ -1,19 +1,21 @@
 
-use std::fs::{File, self};
-use std::io::{self, Write};
+use std::{fs, io};
 use std::path::PathBuf;
 
 use eframe::{self, egui};
 
 use crate::api::{Order, CnfFileRow};
-use crate::inbox::FailureMatchStatus;
+use crate::inbox::{FailureMatchStatus, Failure};
 use crate::inbox::parsers::{parse_failures, parse_cohv_xl};
 use crate::inbox::cnf_files::{self, get_last_n_files, parse_file, write_file};
 use crate::paths;
 
 const MAX_FILES: usize = 2000;
-const INPUT_FILENAME: &str = "inbox.txt";
-const PARTS_FILENAME: &str = "parts.txt";
+
+fn push_str_ls(ls: &mut String, value: impl AsRef<str>) {
+    ls.push_str(value.as_ref());
+    ls.push('\n');
+}
 
 #[derive(Debug,Default)]
 pub struct SapInboxApp {
@@ -21,7 +23,10 @@ pub struct SapInboxApp {
     max_files: usize,
     auto_move_files: bool,
 
-    status: String,
+    inbox_errors: String,
+    parts_list: String,
+    new_inbox: String,
+    log: String,
 }
 
 impl SapInboxApp {
@@ -45,46 +50,62 @@ impl SapInboxApp {
     }
 
     fn init(cc: &eframe::CreationContext<'_>) -> Self {
-        let auto_move = match cc.storage {
-            Some(storage) => storage.get_string("auto_move").unwrap_or_default() == "true",
-            None => false
+        let (auto_move_files, inbox_errors) = match cc.storage {
+            Some(storage) => {
+                (
+                    storage.get_string("auto_move").unwrap_or_default() == "true",
+                    storage.get_string("inbox").unwrap_or_default()
+                )
+            },
+            None => (false, "".into())
         };
 
         Self {
             files_to_parse: 200,
             max_files: cnf_files::get_num_files().unwrap_or(MAX_FILES),
-            auto_move_files: auto_move,
+            auto_move_files,
+            inbox_errors,
 
             ..Default::default()
         }
     }
 
-    pub fn generate_parts(&self) -> io::Result<()> {
-        let file = PathBuf::from(INPUT_FILENAME);
-        let inbox = parse_failures(file)?;
+    fn log(&mut self, val: impl AsRef<str>) {
+        push_str_ls(&mut self.log, val);
+    }
+
+    pub fn generate_parts(&mut self) {
+        let inbox = parse_failures(self.inbox_errors.split("\n"));
 
         // get marks only from failures
-        let mut marks: Vec<&String> = inbox
-            .iter()
-            .map(|f| &f.mark)
+        let (parsed, errors): (Vec<_>, Vec<_>) = inbox
+            .into_iter()
+            .partition(Result::is_ok);
+
+        // log errors
+        errors
+            .into_iter()
+            .for_each(|e| self.log( e.unwrap_err().to_string() ) );
+
+        let mut marks: Vec<String> = parsed 
+            .into_iter()
+            .map(|f| f.unwrap().mark)
             .collect();
 
         // remove duplicates
         marks.sort();
         marks.dedup();
 
-        let mut buffer = File::create(PARTS_FILENAME)?;
-        for m in marks {
-            writeln!(buffer, "{}", m)?;
-        }
-
-        Ok(())
+        self.parts_list = marks.join("\n");
     }
 
     pub fn generate_comparison(&mut self) -> anyhow::Result<()> {
         // parse inbox
-        let file = PathBuf::from(INPUT_FILENAME);
-        let mut inbox = parse_failures(file)?;
+        let mut inbox: Vec<Failure> = parse_failures(self.inbox_errors.split("\n"))
+            .into_iter()
+            .filter(|f| f.is_ok())
+            .map(Result::unwrap)
+            .collect();
         inbox.sort_by( |a, b| a.partial_cmp(b).unwrap() );
 
         // get confirmation file data
@@ -109,14 +130,13 @@ impl SapInboxApp {
         // get orders from cohv
         let userprofile = match std::env::var_os("USERPROFILE") {
             Some(path) => path,
-            None => panic!("Could not locate env variable `USERPROFILE`")
+            None => return Err( anyhow!("Could not locate environment variable `USERPROFILE`") )
         };
     
         let path = PathBuf::from(format!("{}/Documents/SAP/SAP GUI/export.xlsx", userprofile.to_str().unwrap()));
 
         if !path.exists() {
-            self.status = format!("Could not locate export file {}", path.display());
-            return Ok(());
+            return Err( anyhow!("Could not locate export file: {}", path.display()) );
         }
     
         for order in parse_cohv_xl(PathBuf::from(path))? {
@@ -142,10 +162,10 @@ impl SapInboxApp {
         for f in &inbox {
             match f.status() {
                 FailureMatchStatus::NoConfirmationRow => {
-                    eprintln!("{}\t<{}, {}> has no confirmation row", f.mark, f.wbs, f.program);
+                    self.log( format!("{}\t<{}, {}> has no confirmation row", f.mark, f.wbs, f.program) );
                 },
                 FailureMatchStatus::NotEnoughOrdersApplied(qty) => {
-                    eprintln!("{}\t<{}, {}> missing orders for qty of {}/{}", f.mark, f.wbs, f.program, qty, f.qty);
+                    self.log( format!("{}\t<{}, {}> missing orders for qty of {}/{}", f.mark, f.wbs, f.program, qty, f.qty) );
                 },
                 _ => ()
             }
@@ -157,9 +177,10 @@ impl SapInboxApp {
             .map(Option::unwrap)
             .collect();
 
-        if new_inbox.len() > 0 {
-            fs::write("new_inbox.txt", new_inbox.join("\n"))?;
-        }
+        self.new_inbox = new_inbox.join("\n");
+        // if new_inbox.len() > 0 {
+        //     fs::write("new_inbox.txt", new_inbox.join("\n"))?;
+        // }
 
         let prodfile = paths::timestamped_file("Production", "ready");
         let mut records: Vec<CnfFileRow> = Vec::new();
@@ -180,18 +201,17 @@ impl SapInboxApp {
         Ok(())
     }
 
-    fn move_prodfiles(&self) -> io::Result<()> {
+    fn move_prodfiles(&mut self) -> io::Result<()> {
 
         for entry in glob::glob("Production_*.ready").unwrap() {
-            match entry {
-                Ok(prodfile) => {
-                    let mut to = paths::SAP_OUTBOUND.to_path_buf();
-                    to.push(&prodfile);
+            if let Ok(prodfile) = entry {
+                let mut to = paths::SAP_OUTBOUND.to_path_buf();
+                to.push(&prodfile);
 
-                    fs::copy(&prodfile, to)?;
-                    fs::remove_file(&prodfile)?;
-                },
-                Err(_) => todo!("handle error")
+                fs::copy(&prodfile, to)?;
+                fs::remove_file(&prodfile)?;
+
+                self.log(format!("Moved file {}", &prodfile.display()))
             }
         }
 
@@ -201,43 +221,137 @@ impl SapInboxApp {
 
 impl eframe::App for SapInboxApp {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        storage.set_string("auto_move", self.auto_move_files.to_string())
+        storage.set_string("auto_move", self.auto_move_files.to_string());
+        storage.set_string("inbox", self.inbox_errors.to_string());
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::TopBottomPanel::bottom("<footer>")
+        egui::TopBottomPanel::top("action-area")
             .show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
-                    ui.label(&self.status);
+                    if ui.button("Genereate parts list").clicked() {
+                        self.log("Generating parts list...");
+                        self.generate_parts();
+                    }
+                    if ui.button("Genereate confirmation file").clicked() {
+                        self.log("Generating confirmation file...");
+
+                        // TODO: move this to another thread because it takes a while
+                        match self.generate_comparison() {
+                            Ok(_) => self.log("Confirmation file generated"),
+                            Err(e) => self.log( e.to_string() )
+                        }
+                    }
+                    if ui.button("Move confirmation file(s)").clicked() {
+                        match self.move_prodfiles() {
+                            Ok(_) => self.log("File(s) moved"),
+                            Err(e) => self.log( e.to_string() )
+                        }
+                    }
+                });
+            });
+        
+        egui::TopBottomPanel::bottom("options")
+            .show(ctx, |ui| {
+                ui.collapsing("Options", |ui| {
+
+                    ui.checkbox(&mut self.auto_move_files, "Automatically move files after generation");
+                    
+                    ui.horizontal(|ui| {
+                        ui.label("Files to search");
+                        ui.add(
+                            egui::DragValue::new(&mut self.files_to_parse)
+                                .speed(10.0)
+                                .clamp_range(10..=self.max_files)
+                                .custom_formatter(|n, _| {
+                                    if n == self.max_files as f64 {
+                                        return String::from("all");
+                                    }
+
+                                    format!("{n}")
+                                })
+                        );
+                    });
                 });
             });
 
         egui::CentralPanel::default()
-            .show(ctx, |ui| {
-                ui.vertical_centered(|ui| {
-                    if ui.button("Genereate parts list").clicked() {
-                        // TODO: log failure
-                        self.status = match self.generate_parts() {
-                            Ok(_) => "parts list generated".into(),
-                            Err(e) => format!("Error generating partslist: {}", e)
-                        };
+        .show(ctx, |ui| {
+                egui::ScrollArea::both().show(ui, |ui| {
+                    ui.heading("Inbox Errors");
+                    egui::ScrollArea::both()
+                        .id_source("inbox scroll area")
+                        .max_height(100.)
+                        .show(ui, |ui| {
+                            egui::TextEdit::multiline(&mut self.inbox_errors)
+                                .desired_width(f32::INFINITY)
+                                .show(ui);
+                        });
+    
+                    if ui.button("Clear inbox errors").clicked() {
+                        self.inbox_errors.clear();
                     }
-                    if ui.button("Genereate confirmation file").clicked() {
-                        self.status = "generating confirmation file...".into();
-
-                        // TODO: move this to another thread because it takes a while
-                        self.status = match self.generate_comparison() {
-                            Ok(_) => "confirmation file generated".into(),
-                            Err(e) => format!("Error generating confirmation file: {}", e)
-                        };
-                    }
-                    if ui.button("Move confirmation file(s)").clicked() {
-                        self.status = match self.move_prodfiles() {
-                            Ok(_) => "file(s) moved".into(),
-                            Err(e) => format!("Error moving files: {}", e)
-                        };
-                    }
-
+    
+                    ui.separator();
+    
+                    ui.horizontal(|ui| {
+                        ui.vertical(|ui| {
+                            ui.heading("Parts List");
+                            egui::ScrollArea::vertical()
+                                .id_source("parts scroll area")
+                                .max_height(100.)
+                                .show_rows(ui, ui.text_style_height(&egui::TextStyle::Body), 10, |ui, rng| {
+                                    let display = self.parts_list.split('\n')
+                                        .into_iter()
+                                        .skip(rng.start)
+                                        .take(rng.end - rng.start)
+                                        .collect::<Vec<_>>()
+                                        .join("\n");
+    
+                                    ui.style_mut().override_text_style = Some(egui::TextStyle::Monospace);
+            
+                                    if ui
+                                        .add(
+                                            egui::Label::new(display)
+                                                .sense(egui::Sense::click())
+                                        )
+                                        .on_hover_ui(|ui| { ui.label("Click to copy"); })
+                                        .clicked()
+                                    {
+                                        ui.output_mut(|out| out.copied_text = String::from(&self.parts_list));
+                                        self.log("Parts list copied to clipboard.")
+                                    }
+                                });
+                        });
+                        
+                        ui.separator();
+    
+                        ui.vertical(|ui| {
+                            ui.heading("Not Matched");
+                            egui::ScrollArea::both()
+                                .id_source("not-matched scroll area")
+                                .max_height(100.)
+                                .show(ui, |ui| {
+                                    egui::TextEdit::multiline(&mut self.new_inbox)
+                                        .desired_width(f32::INFINITY)
+                                        .show(ui);
+                                });
+                        });
+                    });
+    
+                    ui.separator();
+                    
+                    // TODO: fake terminal for logging
+                    ui.heading("Log");
+                    egui::ScrollArea::both()
+                        .id_source("not-matched scroll area")
+                        .max_height(100.)
+                        .show(ui, |ui| {
+                            egui::TextEdit::multiline(&mut self.log)
+                                .desired_width(f32::INFINITY)
+                                .show(ui);
+                        });
+    
                     // TODO: progress bar
                     // let progress = 0f64;
                     // let progress_bar = egui::ProgressBar::new(progress)
@@ -247,29 +361,6 @@ impl eframe::App for SapInboxApp {
                     //     .add(progress_bar)
                     //     .on_hover_text("The progress bar can be animated!")
                     //     .hovered();
-
-                    ui.collapsing("Options", |ui| {
-
-                        ui.checkbox(&mut self.auto_move_files, "Automatically move files after generation");
-                        
-                        ui.horizontal_centered(|ui| {
-                            ui.label("Files to search");
-                            ui.add(
-                                egui::DragValue::new(&mut self.files_to_parse)
-                                    .speed(10.0)
-                                    .clamp_range(10..=self.max_files)
-                                    .custom_formatter(|n, _| {
-                                        if n == self.max_files as f64 {
-                                            return String::from("all");
-                                        }
-
-                                        format!("{n}")
-                                    })
-                            );
-                        });
-                    });
-
-                    // TODO: fake terminal for logging
                 });
             });
     }

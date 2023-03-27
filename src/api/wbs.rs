@@ -88,7 +88,7 @@ impl Serialize for Wbs {
 // }
 
 impl TryFrom<&str> for Wbs {
-    type Error = String;
+    type Error = anyhow::Error;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         if value == "" {
@@ -97,12 +97,14 @@ impl TryFrom<&str> for Wbs {
 
         if let Some(caps) = COST_CENTER_WBS.captures(value) {
             Ok(Self::CostCenter {
+                // unwraps should not panic here, if regex worked
                 cc: caps.get(1).unwrap().as_str().parse().unwrap()
             })
         }
 
         else if let Some(caps) = HD_WBS.captures(value) {
             Ok(Self::Hd {
+                // unwraps should not panic here, if regex worked
                 job: caps.get(1).unwrap().as_str().into(),
                 id: caps.get(2).unwrap().as_str().parse().unwrap()
             })
@@ -110,13 +112,14 @@ impl TryFrom<&str> for Wbs {
         
         else if let Some(caps) = LEGACY_WBS.captures(value) {
             Ok(Self::Legacy {
+                // unwraps should not panic here, if regex worked
                 job: caps.get(1).unwrap().as_str().into(),
                 shipment: caps.get(2).unwrap().as_str().parse().unwrap()
             })
         }
 
         else {
-            Err(format!("Failed to parse WBS <{}>", value))
+            Err( anyhow!("Failed to parse WBS <{}>", value) )
         }
     }
 }

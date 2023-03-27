@@ -177,7 +177,7 @@ impl Hash for Failure {
 /// 
 /// will fail (return Err) if the input string does not match this pattern.
 impl TryFrom<String> for Failure {
-    type Error = String;
+    type Error = anyhow::Error;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         if let Some(caps) = INBOX_TEXT.captures(&value) {
@@ -194,6 +194,6 @@ impl TryFrom<String> for Failure {
             )
         }
 
-        Err(format!("Failed to parse line `{}`", value))
+        Err( anyhow!("Failed to parse line `{}`", value) )
     }
 }

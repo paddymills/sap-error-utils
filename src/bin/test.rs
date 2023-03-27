@@ -54,7 +54,7 @@ impl HeaderColumn for ExampleHeader {
         }
     }
 
-    fn parse_row(header: &HashMap<Self, usize>, row: &[DataType]) -> Self::Row
+    fn parse_row(header: &HashMap<Self, usize>, row: &[DataType]) -> anyhow::Result<Self::Row>
         where Self: Sized
     {
         // TODO: handle parsing errors (get_string/get_int)
@@ -65,7 +65,7 @@ impl HeaderColumn for ExampleHeader {
         let _type = row[*header.get(&Self::Type).unwrap() ].get_string().unwrap().into();
         let plant = row[*header.get(&Self::Plant).unwrap()].get_string().unwrap().into();
 
-        ExampleRow { order, matl, qty, wbs, _type, plant }
+        Ok( ExampleRow { order, matl, qty, wbs, _type, plant } )
     }
 }
 
