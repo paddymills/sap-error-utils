@@ -51,14 +51,15 @@ impl SapInboxApp {
     }
 
     fn init(cc: &eframe::CreationContext<'_>) -> Self {
-        let (auto_move_files, inbox_errors) = match cc.storage {
+        let (auto_move_files, inbox_errors, new_inbox) = match cc.storage {
             Some(storage) => {
                 (
                     storage.get_string("auto_move").unwrap_or_default() == "true",
-                    storage.get_string("inbox").unwrap_or_default()
+                    storage.get_string("inbox").unwrap_or_default(),
+                    storage.get_string("new_inbox").unwrap_or_default(),
                 )
             },
-            None => (false, "".into())
+            None => (false, "".into(), "".into())
         };
 
         Self {
@@ -66,6 +67,7 @@ impl SapInboxApp {
             max_files: cnf_files::get_num_files().unwrap_or(MAX_FILES),
             auto_move_files,
             inbox_errors,
+            new_inbox,
 
             ..Default::default()
         }
@@ -224,17 +226,18 @@ impl eframe::App for SapInboxApp {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         storage.set_string("auto_move", self.auto_move_files.to_string());
         storage.set_string("inbox", self.inbox_errors.to_string());
+        storage.set_string("new_inbox", self.new_inbox.to_string());
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::TopBottomPanel::top("action-area")
             .show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
-                    if ui.button("Genereate parts list").clicked() {
+                    if ui.button("Generate parts list").clicked() {
                         self.log("Generating parts list...");
                         self.generate_parts();
                     }
-                    if ui.button("Genereate confirmation file").clicked() {
+                    if ui.button("Generate confirmation file").clicked() {
                         self.log("Generating confirmation file...");
 
                         // TODO: move this to another thread because it takes a while
@@ -356,6 +359,10 @@ impl eframe::App for SapInboxApp {
                                 .desired_width(f32::INFINITY)
                                 .show(ui);
                         });
+
+                        if ui.button("Clear not matched").clicked() {
+                            self.new_inbox.clear();
+                        }
                                 
     
                     // TODO: progress bar
