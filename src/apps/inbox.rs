@@ -8,13 +8,14 @@ use crate::api::{Order, CnfFileRow};
 use crate::inbox::{FailureMatchStatus, Failure};
 use crate::inbox::parsers::{parse_failures, parse_cohv_xl};
 use crate::inbox::cnf_files::{self, get_last_n_files, parse_file, write_file};
-use crate::paths;
+use crate::paths::{self, timestamped_file};
 
 const MAX_FILES: usize = 2000;
 
 fn push_str_ls(ls: &mut String, value: impl AsRef<str>) {
+    if ls.len() > 0 { ls.push('\n'); }
+
     ls.push_str(value.as_ref());
-    ls.push('\n');
 }
 
 #[derive(Debug,Default)]
@@ -178,9 +179,9 @@ impl SapInboxApp {
             .collect();
 
         self.new_inbox = new_inbox.join("\n");
-        // if new_inbox.len() > 0 {
-        //     fs::write("new_inbox.txt", new_inbox.join("\n"))?;
-        // }
+        if new_inbox.len() > 0 {
+            fs::write(timestamped_file("new_inbox", "txt"), new_inbox.join("\n"))?;
+        }
 
         let prodfile = paths::timestamped_file("Production", "ready");
         let mut records: Vec<CnfFileRow> = Vec::new();
@@ -275,82 +276,87 @@ impl eframe::App for SapInboxApp {
                 });
             });
 
-        egui::CentralPanel::default()
-        .show(ctx, |ui| {
-                egui::ScrollArea::both().show(ui, |ui| {
-                    ui.heading("Inbox Errors");
-                    egui::ScrollArea::both()
-                        .id_source("inbox scroll area")
-                        .max_height(100.)
-                        .show(ui, |ui| {
-                            egui::TextEdit::multiline(&mut self.inbox_errors)
-                                .desired_width(f32::INFINITY)
-                                .show(ui);
-                        });
-    
-                    if ui.button("Clear inbox errors").clicked() {
-                        self.inbox_errors.clear();
-                    }
-    
-                    ui.separator();
-    
-                    ui.horizontal(|ui| {
-                        ui.vertical(|ui| {
-                            ui.heading("Parts List");
-                            egui::ScrollArea::vertical()
-                                .id_source("parts scroll area")
-                                .max_height(100.)
-                                .show_rows(ui, ui.text_style_height(&egui::TextStyle::Body), 10, |ui, rng| {
-                                    let display = self.parts_list.split('\n')
-                                        .into_iter()
-                                        .skip(rng.start)
-                                        .take(rng.end - rng.start)
-                                        .collect::<Vec<_>>()
-                                        .join("\n");
-    
-                                    ui.style_mut().override_text_style = Some(egui::TextStyle::Monospace);
-            
-                                    if ui
-                                        .add(
-                                            egui::Label::new(display)
-                                                .sense(egui::Sense::click())
-                                        )
-                                        .on_hover_ui(|ui| { ui.label("Click to copy"); })
-                                        .clicked()
-                                    {
-                                        ui.output_mut(|out| out.copied_text = String::from(&self.parts_list));
-                                        self.log("Parts list copied to clipboard.")
-                                    }
-                                });
-                        });
-                        
-                        ui.separator();
-    
-                        ui.vertical(|ui| {
-                            ui.heading("Not Matched");
-                            egui::ScrollArea::both()
-                                .id_source("not-matched scroll area")
-                                .max_height(100.)
-                                .show(ui, |ui| {
-                                    egui::TextEdit::multiline(&mut self.new_inbox)
-                                        .desired_width(f32::INFINITY)
-                                        .show(ui);
-                                });
-                        });
+
+        egui::TopBottomPanel::top("inbox-errors")
+            .resizable(true)
+            .min_height(100.)
+            .show(ctx, |ui| {
+                ui.heading("Inbox Errors");
+                egui::ScrollArea::both()
+                    .id_source("inbox scroll area")
+                    .max_height(200.)
+                    .show(ui, |ui| {
+                        egui::TextEdit::multiline(&mut self.inbox_errors)
+                            .desired_width(f32::INFINITY)
+                            .show(ui);
                     });
-    
-                    ui.separator();
-                    
-                    // TODO: fake terminal for logging
-                    ui.heading("Log");
+
+                if ui.button("Clear inbox errors").clicked() {
+                    self.inbox_errors.clear();
+                }
+            });
+
+        egui::TopBottomPanel::bottom("log")
+            .resizable(true)
+            .min_height(100.)
+            .show(ctx, |ui| {
+                ui.heading("Log");
                     egui::ScrollArea::both()
-                        .id_source("not-matched scroll area")
+                        .stick_to_bottom(true)
+                        .id_source("log scroll area")
                         .max_height(100.)
                         .show(ui, |ui| {
                             egui::TextEdit::multiline(&mut self.log)
                                 .desired_width(f32::INFINITY)
                                 .show(ui);
                         });
+            });
+
+        egui::SidePanel::left("parts")
+            // .resizable(true)
+            .min_width(150.)
+            .show(ctx, |ui| {
+                ui.heading("Parts List");
+                    egui::ScrollArea::vertical()
+                        .id_source("parts scroll area")
+                        // .max_height(100.)
+                        .show_rows(ui, ui.text_style_height(&egui::TextStyle::Body), 10, |ui, rng| {
+                            let display = self.parts_list.split('\n')
+                                .into_iter()
+                                .skip(rng.start)
+                                .take(rng.end - rng.start)
+                                .collect::<Vec<_>>()
+                                .join("\n");
+
+                            ui.style_mut().override_text_style = Some(egui::TextStyle::Monospace);
+    
+                            if ui
+                                .add(
+                                    egui::Label::new(display)
+                                        .sense(egui::Sense::click())
+                                )
+                                .on_hover_ui(|ui| { ui.label("Click to copy"); })
+                                .clicked()
+                            {
+                                ui.output_mut(|out| out.copied_text = String::from(&self.parts_list));
+                                self.log("Parts list copied to clipboard.")
+                            }
+                        });
+            });
+
+        egui::CentralPanel::default()
+        .show(ctx, |ui| {
+                egui::ScrollArea::both().show(ui, |ui| {
+                    ui.heading("Not Matched");
+                    egui::ScrollArea::both()
+                        .id_source("not-matched scroll area")
+                        .max_height(100.)
+                        .show(ui, |ui| {
+                            egui::TextEdit::multiline(&mut self.new_inbox)
+                                .desired_width(f32::INFINITY)
+                                .show(ui);
+                        });
+                                
     
                     // TODO: progress bar
                     // let progress = 0f64;
