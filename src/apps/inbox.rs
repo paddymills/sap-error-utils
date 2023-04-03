@@ -75,6 +75,12 @@ impl SapInboxApp {
         }
     }
 
+    fn inbox_errors(&self) -> std::str::Split<&str> {
+        self.inbox_errors
+            .trim_end_matches("\n")
+            .split("\n")
+    }
+
     fn log(&mut self, val: impl AsRef<str>) {
         push_str_ls(&mut self.log, val);
     }
@@ -84,7 +90,7 @@ impl SapInboxApp {
             return Err( anyhow!("No inbox errors to parse") );
         }
 
-        let inbox = parse_failures(self.inbox_errors.split("\n"));
+        let inbox = parse_failures(self.inbox_errors());
 
         // get marks only from failures
         let (parsed, errors): (Vec<_>, Vec<_>) = inbox
@@ -116,7 +122,7 @@ impl SapInboxApp {
         }
 
         // parse inbox
-        let mut inbox: Vec<Failure> = parse_failures(self.inbox_errors.split("\n"))
+        let mut inbox: Vec<Failure> = parse_failures(self.inbox_errors())
             .into_iter()
             .filter(|f| f.is_ok())
             .map(Result::unwrap)
@@ -299,6 +305,7 @@ impl eframe::App for SapInboxApp {
                     .id_source("inbox scroll area")
                     .max_height(200.)
                     .show(ui, |ui| {
+                        ui.style_mut().wrap = Some(false);
                         egui::TextEdit::multiline(&mut self.inbox_errors)
                             .desired_width(f32::INFINITY)
                             .show(ui);
