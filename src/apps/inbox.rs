@@ -28,6 +28,8 @@ pub struct SapInboxApp {
     parts_list: String,
     new_inbox: String,
     log: String,
+
+    popup_error: String,
 }
 
 impl SapInboxApp {
@@ -77,7 +79,11 @@ impl SapInboxApp {
         push_str_ls(&mut self.log, val);
     }
 
-    pub fn generate_parts(&mut self) {
+    pub fn generate_parts(&mut self) -> anyhow::Result<()> {
+        if self.inbox_errors.is_empty() {
+            return Err( anyhow!("No inbox errors to parse") );
+        }
+
         let inbox = parse_failures(self.inbox_errors.split("\n"));
 
         // get marks only from failures
@@ -100,9 +106,15 @@ impl SapInboxApp {
         marks.dedup();
 
         self.parts_list = marks.join("\n");
+
+        Ok(())
     }
 
     pub fn generate_comparison(&mut self) -> anyhow::Result<()> {
+        if self.inbox_errors.is_empty() {
+            return Err( anyhow!("No inbox errors to parse") );
+        }
+
         // parse inbox
         let mut inbox: Vec<Failure> = parse_failures(self.inbox_errors.split("\n"))
             .into_iter()
@@ -233,19 +245,41 @@ impl eframe::App for SapInboxApp {
         egui::TopBottomPanel::top("action-area")
             .show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
-                    if ui.button("Generate parts list").clicked() {
+                    let res_parts = ui.button("Generate parts list");
+                    let err_parts = ui.make_persistent_id("gen-parts-error-popup");
+                    egui::popup_below_widget(ui, err_parts, &res_parts, |ui| {
+                        ui.style_mut().wrap = Some(false);
+                        ui.label(&self.popup_error);
+                    });
+
+                    if res_parts.clicked() {
                         self.log("Generating parts list...");
-                        self.generate_parts();
+                        if let Err(e) = self.generate_parts() {
+                            self.popup_error = e.to_string();
+                            ui.memory_mut(|mem| mem.open_popup(err_parts));
+                        }
                     }
-                    if ui.button("Generate confirmation file").clicked() {
+
+                    let res_cnf = ui.button("Generate confirmation file");
+                    let err_cnf = ui.make_persistent_id("gen-cnf-error-popup");
+                    egui::popup_below_widget(ui, err_cnf, &res_cnf, |ui| {
+                        ui.style_mut().wrap = Some(false);
+                        ui.label(&self.popup_error);
+                    });
+                    if res_cnf.clicked() {
                         self.log("Generating confirmation file...");
 
                         // TODO: move this to another thread because it takes a while
                         match self.generate_comparison() {
                             Ok(_) => self.log("Confirmation file generated"),
-                            Err(e) => self.log( e.to_string() )
+                            Err(e) => {
+                                self.popup_error = e.to_string();
+                                ui.memory_mut(|mem| mem.open_popup(err_cnf));
+                            }
                         }
                     }
+
+
                     if ui.button("Move confirmation file(s)").clicked() {
                         match self.move_prodfiles() {
                             Ok(_) => self.log("File(s) moved"),
@@ -254,6 +288,27 @@ impl eframe::App for SapInboxApp {
                     }
                 });
             });
+
+
+        egui::TopBottomPanel::top("inbox-errors")
+            .resizable(true)
+            .min_height(100.)
+            .show(ctx, |ui| {
+                ui.heading("Inbox Errors");
+                egui::ScrollArea::both()
+                    .id_source("inbox scroll area")
+                    .max_height(200.)
+                    .show(ui, |ui| {
+                        egui::TextEdit::multiline(&mut self.inbox_errors)
+                            .desired_width(f32::INFINITY)
+                            .show(ui);
+                    });
+
+                if ui.button("Clear inbox errors").clicked() {
+                    self.inbox_errors.clear();
+                }
+            });
+
         
         egui::TopBottomPanel::bottom("options")
             .show(ctx, |ui| {
@@ -278,27 +333,6 @@ impl eframe::App for SapInboxApp {
                     });
                 });
             });
-
-
-        egui::TopBottomPanel::top("inbox-errors")
-            .resizable(true)
-            .min_height(100.)
-            .show(ctx, |ui| {
-                ui.heading("Inbox Errors");
-                egui::ScrollArea::both()
-                    .id_source("inbox scroll area")
-                    .max_height(200.)
-                    .show(ui, |ui| {
-                        egui::TextEdit::multiline(&mut self.inbox_errors)
-                            .desired_width(f32::INFINITY)
-                            .show(ui);
-                    });
-
-                if ui.button("Clear inbox errors").clicked() {
-                    self.inbox_errors.clear();
-                }
-            });
-
         egui::TopBottomPanel::bottom("log")
             .resizable(true)
             .min_height(100.)
