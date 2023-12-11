@@ -33,7 +33,7 @@ pub struct SapInboxApp {
 }
 
 impl SapInboxApp {
-    const NAME: &str = "SAP Inbox Errors";
+    const NAME: &'static str = "SAP Inbox Errors";
 
     pub fn new() -> eframe::AppCreator {
         Box::new(|cc| Box::new(Self::init(cc)))
@@ -111,7 +111,8 @@ impl SapInboxApp {
         marks.sort();
         marks.dedup();
 
-        self.parts_list = marks.join("\n");
+        // cannot delimit on '\n' because applications like SAP and Excel don't read this as multiple lines
+        self.parts_list = marks.join("\r\n");
 
         Ok(())
     }
