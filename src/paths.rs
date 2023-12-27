@@ -23,6 +23,8 @@ lazy_static! {
 }
 
 /// Create a filename with a naturally sortable timestamp
+/// 
+/// returns a formatted string `{prefix}_{year}{month}{day}{hour}{minute}{seconds}.{ext}`
 pub fn timestamped_file(prefix: &str, ext: &str) -> String {
     let timestamp = chrono::Local::now().format("%Y%m%d%H%M%S").to_string();
 

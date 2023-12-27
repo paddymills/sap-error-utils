@@ -6,7 +6,7 @@ use super::cnf_serde::three_digit_f64;
 
 lazy_static! {
     // Production job number match
-    static ref PROD_JOB: Regex = Regex::new(r"S-\d{7}").expect("Failed to build JOB_PART Regex");
+    static ref PROD_JOB_WBS: Regex = Regex::new(r"S|D-\d{7}-\d{5}").expect("Failed to build PROD_JOB Regex");
 
     // machine name pattern matching
     static ref MACHINES: RegexSet = {
@@ -129,6 +129,13 @@ impl Into<IssueFileRow> for CnfFileRow {
     }
 }
 
+impl Into<IssueFileRow> for &CnfFileRow {
+    /// Convert a [`CnfFileRow`] into an [`IssueFileRow`]
+    fn into(self) -> IssueFileRow {
+        self.clone().into()
+    }
+}
+
 fn infer_codes(row: &CnfFileRow) -> (IssueCode, String, String) {
     let (user1, user2) = match &row.part_wbs {
         Wbs::CostCenter { cc } => {
@@ -159,7 +166,7 @@ fn infer_codes(row: &CnfFileRow) -> (IssueCode, String, String) {
         Wbs::None => unreachable!()
     };
 
-    if PROD_JOB.is_match(&row.job) {
+    if PROD_JOB_WBS.is_match(&row.part_wbs.to_string()) {
         // let code = match &row.matl_wbs {
         //     // project stock material
         //     Some(wbs) => {
@@ -209,7 +216,7 @@ mod tests {
     fn get_test_row() -> CnfFileRow {
         CnfFileRow {
             mark: "1210123A-X1A".into(),
-            job: "S-1210123".into(),
+            id: "S-1210123".into(),
             part_wbs: "S-1210123-2-10".try_into().unwrap(),
             part_loc: "PROD".into(),
             part_qty: 5u64,
@@ -302,7 +309,7 @@ mod tests {
     #[should_panic]
     fn infer_fallout() {
         let mut row = get_test_row();
-        row.job = "D-HSU".into();
+        row.part_wbs = "D-HSU-10004".try_into().unwrap();
 
         let _ = infer_codes(&row);
     }

@@ -10,7 +10,7 @@ use crate::api::CnfFileRow;
 use crate::paths;
 
 const HEADERS: [&str; 13] = [
-    "Mark", "Job", "PartWbs", "PartLoc", "PartQty", "PartUom", "Matl", "MatlWbs" , "MatlQty", "MatlUom", "MatlLoc", "Plant", "Program"
+    "Mark", "Id", "PartWbs", "PartLoc", "PartQty", "PartUom", "Matl", "MatlWbs" , "MatlQty", "MatlUom", "MatlLoc", "Plant", "Program"
 ];
 const DELIM: u8 = b'\t';
 
@@ -84,7 +84,9 @@ pub fn parse_file(filepath: PathBuf) -> io::Result<Vec<CnfFileRow>> {
     Ok(records)
 }
 
-pub fn write_file(records: Vec<CnfFileRow>, filepath: PathBuf) -> io::Result<()> {
+pub fn write_file<T>(records: Vec<T>, filepath: PathBuf) -> io::Result<()>
+    where T: serde::Serialize
+{
     let mut writer = READY_WRITER.from_path(filepath)?;
 
     for record in records {

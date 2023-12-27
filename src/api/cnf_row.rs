@@ -16,8 +16,9 @@ use super::cnf_serde::three_digit_f64;
 pub struct CnfFileRow {
     /// Part mark (piecemark)
     pub mark:     String,
-    /// Job number (without structure) in the format `S-{job}`
-    pub job:      String,
+    /// unique record id from Sigmanest
+    // TODO: use u32
+    pub id:       String,
     /// WBS element for part
     #[serde(deserialize_with="Wbs::deserialize")]
     pub part_wbs: Wbs,
