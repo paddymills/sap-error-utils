@@ -148,7 +148,6 @@ impl SapInboxApp {
         let issuefile = paths::timestamped_file("Issue", "ready");
         let mut records: Vec<IssueFileRow> = Vec::new();
         inbox.iter_mut()
-            // .map(Into::into)
             .map(|f| f.generate_issue_output())
             .for_each(|r| {
                 match r {
