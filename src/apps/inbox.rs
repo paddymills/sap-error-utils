@@ -158,7 +158,7 @@ impl SapInboxApp {
 
         write_file(records, issuefile.into())?;
         if self.auto_move_files {
-            self.move_prodfiles()?;
+            self.move_issuefiles()?;
         }
 
         Ok(())
@@ -271,16 +271,24 @@ impl SapInboxApp {
     }
 
     fn move_prodfiles(&mut self) -> io::Result<()> {
+        self.move_files("Production_*.ready")
+    }
 
-        for entry in glob::glob("Production_*.ready").unwrap() {
-            if let Ok(prodfile) = entry {
+    fn move_issuefiles(&mut self) -> io::Result<()> {
+        self.move_files("Issue_*.ready")
+    }
+
+    fn move_files(&mut self, pattern: &str) -> io::Result<()> {
+
+        for entry in glob::glob(pattern).unwrap() {
+            if let Ok(file) = entry {
                 let mut to = paths::SAP_OUTBOUND.to_path_buf();
-                to.push(&prodfile);
+                to.push(&file);
 
-                fs::copy(&prodfile, to)?;
-                fs::remove_file(&prodfile)?;
+                fs::copy(&file, to)?;
+                fs::remove_file(&file)?;
 
-                self.log(format!("Moved file {}", &prodfile.display()))
+                self.log(format!("Moved file {}", &file.display()))
             }
         }
 
@@ -376,7 +384,7 @@ impl eframe::App for SapInboxApp {
                         if res_issue.clicked() {
                             // TODO: move this to another thread because it takes a while
                             match self.issue_all() {
-                                Ok(_) => self.log("Confirmation file generated"),
+                                Ok(_) => self.log("Issue file generated"),
                                 Err(e) => {
                                     self.popup_error = e.to_string();
                                     ui.memory_mut(|mem| mem.open_popup(err_issue));
