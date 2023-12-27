@@ -3,7 +3,7 @@ use std::{cmp::Ordering, hash::{Hash, Hasher}};
 
 use regex::Regex;
 
-use crate::api::{CnfFileRow, Wbs, Order, OrderData};
+use crate::api::{CnfFileRow, Wbs, Order, OrderData, IssueFileRow};
 
 lazy_static! {
     static ref INBOX_TEXT: Regex = Regex::new(r"Planned order not found for (\d{7}[a-zA-Z]-[\w-]+), (D-\d{7}-\d{5}), ([\d,]+).000, Sigmanest Program:([\d-]+)")
@@ -93,6 +93,20 @@ impl Failure {
                 }
         
                 Ok(result)
+            },
+            None => Err(format!("No CnfFileRow matched for {}", self.mark))
+        }
+    }
+
+    pub fn generate_issue_output(&mut self) -> Result<IssueFileRow, String> {
+        match &self.cnf_row {
+            Some(row) => {
+                let mut row = row.clone();
+                row.matl_qty = self.qty() as f64 * row.area_per_ea();
+
+                self.qty = 0;
+
+                Ok(row.into())
             },
             None => Err(format!("No CnfFileRow matched for {}", self.mark))
         }

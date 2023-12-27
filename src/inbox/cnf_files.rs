@@ -84,7 +84,9 @@ pub fn parse_file(filepath: PathBuf) -> io::Result<Vec<CnfFileRow>> {
     Ok(records)
 }
 
-pub fn write_file(records: Vec<CnfFileRow>, filepath: PathBuf) -> io::Result<()> {
+pub fn write_file<T>(records: Vec<T>, filepath: PathBuf) -> io::Result<()>
+    where T: serde::Serialize
+{
     let mut writer = READY_WRITER.from_path(filepath)?;
 
     for record in records {

@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use eframe::{self, egui};
 
-use crate::api::{Order, CnfFileRow};
+use crate::api::{Order, CnfFileRow, IssueFileRow};
 use crate::inbox::{FailureMatchStatus, Failure};
 use crate::inbox::parsers::{parse_failures, parse_cohv_xl};
 use crate::inbox::cnf_files::{self, get_last_n_files, parse_file, write_file};
@@ -113,6 +113,54 @@ impl SapInboxApp {
 
         // cannot delimit on '\n' because applications like SAP and Excel don't read this as multiple lines
         self.parts_list = marks.join("\r\n");
+
+        Ok(())
+    }
+
+    fn issue_all(&mut self) -> anyhow::Result<()> {
+        // parse inbox
+        let mut inbox: Vec<Failure> = parse_failures(self.inbox_errors())
+            .into_iter()
+            .filter(|f| f.is_ok())
+            .map(Result::unwrap)
+            .collect();
+        inbox.sort_by( |a, b| a.partial_cmp(b).unwrap() );
+
+        // get confirmation file data
+        for f in get_last_n_files(self.files_to_parse)? {
+            for cnf_row in parse_file(f.path())? {
+                inbox
+                    .iter_mut()
+                    .filter(|f| **f == cnf_row)
+                    .for_each(|f| f.set_confirmation_row_data(cnf_row.clone()));
+            }
+
+            let has_confirmation_row = inbox
+                .iter()
+                .filter(|f| !f.has_confirmation_row())
+                .count();
+
+            if has_confirmation_row == 0 {
+                break;
+            }
+        }
+
+        let issuefile = paths::timestamped_file("Issue", "ready");
+        let mut records: Vec<IssueFileRow> = Vec::new();
+        inbox.iter_mut()
+            // .map(Into::into)
+            .map(|f| f.generate_issue_output())
+            .for_each(|r| {
+                match r {
+                    Ok(result) => records.push(result),
+                    Err(e) => eprintln!("{}", e),
+                }
+            });
+
+        write_file(records, issuefile.into())?;
+        if self.auto_move_files {
+            self.move_prodfiles()?;
+        }
 
         Ok(())
     }
@@ -312,9 +360,32 @@ impl eframe::App for SapInboxApp {
                             .show(ui);
                     });
 
-                if ui.button("Clear inbox errors").clicked() {
-                    self.inbox_errors.clear();
-                }
+                ui.horizontal(|ui| {
+                    if ui.button("Clear inbox errors").clicked() {
+                        self.inbox_errors.clear();
+                    }
+    
+                    if !self.inbox_errors.is_empty() {
+                        // TODO: refactor this "button with a popup for errors"
+                        let res_issue = ui.button("Issue all errors");
+                        let err_issue = ui.make_persistent_id("issue-error-popup");
+                        egui::popup_below_widget(ui, err_issue, &res_issue, |ui| {
+                            ui.style_mut().wrap = Some(false);
+                            ui.label(&self.popup_error);
+                        });
+    
+                        if res_issue.clicked() {
+                            // TODO: move this to another thread because it takes a while
+                            match self.issue_all() {
+                                Ok(_) => self.log("Confirmation file generated"),
+                                Err(e) => {
+                                    self.popup_error = e.to_string();
+                                    ui.memory_mut(|mem| mem.open_popup(err_issue));
+                                }
+                            }
+                        }
+                    }
+                });
             });
 
         
