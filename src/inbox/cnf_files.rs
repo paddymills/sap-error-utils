@@ -10,7 +10,7 @@ use crate::api::CnfFileRow;
 use crate::paths;
 
 const HEADERS: [&str; 13] = [
-    "Mark", "Job", "PartWbs", "PartLoc", "PartQty", "PartUom", "Matl", "MatlWbs" , "MatlQty", "MatlUom", "MatlLoc", "Plant", "Program"
+    "Mark", "Id", "PartWbs", "PartLoc", "PartQty", "PartUom", "Matl", "MatlWbs" , "MatlQty", "MatlUom", "MatlLoc", "Plant", "Program"
 ];
 const DELIM: u8 = b'\t';
 
