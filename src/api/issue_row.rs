@@ -1,8 +1,9 @@
+use regex::{Regex, RegexSet, RegexSetBuilder};
+use serde::de::{value, IntoDeserializer};
+use serde::Deserialize;
 
-use regex::{Regex, RegexSetBuilder, RegexSet};
-
-use super::{CnfFileRow, Plant, Wbs};
 use super::cnf_serde::three_digit_f64;
+use super::{CnfFileRow, Plant, Wbs};
 
 lazy_static! {
     // Production job number match
@@ -25,15 +26,15 @@ lazy_static! {
 }
 
 /// Issue file row (SAP Confirmation Files)
-/// 
+///
 /// ### Text format
 /// tab delimited row in the format:
 /// ```tsv
-/// {code}	{user1}	{user2}	{material master}	{material wbs}	{material qty}	{material UoM: IN2}	{material location}	{plant}	{program}	
+/// {code}	{user1}	{user2}	{material master}	{material wbs}	{material qty}	{material UoM: IN2}	{material location}	{plant}	{program}
 /// ```
-/// 
+///
 /// ### Transaction Codes
-/// 
+///
 /// | code | SAP transactions | description |
 /// |---|---|---|
 /// | PR01 | MIGO 221Q | Comsumption for project from project |
@@ -41,27 +42,27 @@ lazy_static! {
 /// | PR03 | MIGO 311Q + MIGO 221Q | Transfer from project to project And consumption from latter project |
 /// | CC01 | MIGO 201 | Consumption for cost center from warehouse |
 /// | CC02 | MIGO [transfer from WBS] & 201 | Consumption for cost center from project |
-/// 
+///
 /// ### User Columns
-/// 
+///
 /// User columns are to fill in where the material is being charged,
 /// depending on what type of [transaction code](#transaction-codes) is used.
-/// 
+///
 /// | code | user1 | user2 |
 /// |---|---|---|
 /// | PR* | `D-{job}` | Shipment |
 /// | CC* | Cost Center | [G/L Account](#gl-accounts) |
 ///
 /// ### G/L Accounts
-/// 
+///
 /// G/L accounts should be a `634xxx` code
-/// 
+///
 /// | Usage | G/L Account |
 /// |---|---|
 /// | Machine Parts (i.e. CNC table parts) | `634124` |
 /// | Shop Supplies (default) | `637118` |
 #[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all="PascalCase")]
+#[serde(rename_all = "PascalCase")]
 pub struct IssueFileRow {
     /// [Transaction code](#transaction-codes)
     pub code: IssueCode,
@@ -70,14 +71,13 @@ pub struct IssueFileRow {
     /// Shipment/GL Account ([User2 Column](#user-columns))
     pub user2: String,
 
-
     /// Material master
-    pub matl:     String,
+    pub matl: String,
     /// Material WBS Element
     // pub matl_wbs: Option<Wbs>,
     pub matl_wbs: Wbs,
     /// Material quantity
-    #[serde(serialize_with="three_digit_f64")]
+    #[serde(serialize_with = "three_digit_f64")]
     pub matl_qty: f64,
     /// Material unit of measure
     pub matl_uom: String,
@@ -85,9 +85,9 @@ pub struct IssueFileRow {
     pub matl_loc: Option<String>,
 
     /// Material plant
-    pub plant:    Plant,
+    pub plant: Plant,
     /// Program number
-    pub program:  String
+    pub program: String,
 }
 
 /// Issue codes
@@ -110,21 +110,31 @@ pub enum IssueCode {
     CostCenterFromProject,
 }
 
+impl TryFrom<&str> for IssueCode {
+    type Error = value::Error;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::deserialize(value.into_deserializer())
+    }
+}
+
 impl Into<IssueFileRow> for CnfFileRow {
     /// Convert a [`CnfFileRow`] into an [`IssueFileRow`]
     fn into(self) -> IssueFileRow {
         let (code, user1, user2) = infer_codes(&self);
 
         IssueFileRow {
-            code, user1, user2,
+            code,
+            user1,
+            user2,
 
-            matl:     self.matl,
+            matl: self.matl,
             matl_wbs: self.matl_wbs,
             matl_qty: self.matl_qty,
             matl_uom: self.matl_uom,
             matl_loc: self.matl_loc,
-            plant:    self.plant,
-            program:  self.program
+            plant: self.plant,
+            program: self.program,
         }
     }
 }
@@ -133,6 +143,27 @@ impl Into<IssueFileRow> for &CnfFileRow {
     /// Convert a [`CnfFileRow`] into an [`IssueFileRow`]
     fn into(self) -> IssueFileRow {
         self.clone().into()
+    }
+}
+
+impl From<&tiberius::Row> for IssueFileRow {
+    fn from(row: &tiberius::Row) -> Self {
+        Self {
+            code: row.get::<&str, _>("Code").unwrap().try_into().unwrap(),
+            user1: row.get::<&str, _>("User1").unwrap().into(),
+            user2: row.get::<&str, _>("User2").unwrap().into(),
+            matl: row.get::<&str, _>("MaterialMaster").unwrap().into(),
+            matl_wbs: row
+                .get::<&str, _>("MaterialWbs")
+                .unwrap()
+                .to_string()
+                .into(),
+            matl_qty: row.get::<f64, _>("TotalNestedArea").unwrap().into(),
+            matl_uom: row.get::<&str, _>("MaterialUoM").unwrap().into(),
+            matl_loc: row.get::<&str, _>("MaterialLocation").map(Into::into),
+            plant: row.get::<&str, _>("Plant").unwrap().into(),
+            program: row.get::<i32, _>("Id").unwrap().to_string(),
+        }
     }
 }
 
@@ -148,22 +179,18 @@ fn infer_codes(row: &CnfFileRow) -> (IssueCode, String, String) {
                 Wbs::None => IssueCode::CostCenterFromStock,
                 _ => IssueCode::CostCenterFromProject,
             };
-        
+
             // cost center
             let user1 = cc;
-        
+
             // infer G/L account
             let user2 = infer_gl_acct(&row.mark);
-    
-            return (code, format!("{}", user1), user2)
-        },
-        Wbs::Hd { job, id: _ } => {
-            (format!("D-{}", job), "01".into())
-        },
-        Wbs::Legacy { job, shipment } => {
-            (format!("D-{}", job), format!("{:02}", shipment))
-        },
-        Wbs::None => unreachable!()
+
+            return (code, format!("{}", user1), user2);
+        }
+        Wbs::Hd { job, id: _ } => (format!("D-{}", job), "01".into()),
+        Wbs::Legacy { job, shipment } => (format!("D-{}", job), format!("{:02}", shipment)),
+        Wbs::None => unreachable!(),
     };
 
     if PROD_JOB_WBS.is_match(&row.part_wbs.to_string()) {
@@ -172,29 +199,32 @@ fn infer_codes(row: &CnfFileRow) -> (IssueCode, String, String) {
         //     Some(wbs) => {
         //         // part and material have the same project
         //         if wbs.to_string().starts_with(&user1) { IssueCode::ProjectFromProject }
-    
+
         //         // part and material have different projects
         //         else { IssueCode::ProjectFromOtherProject }
         //     },
-    
+
         //     // plant stock material
         //     None => IssueCode::ProjectFromStock
         // };
         let code = match &row.matl_wbs {
             // plant stock material
             Wbs::None => IssueCode::ProjectFromStock,
-            
+
             // project stock material
             wbs => {
                 // part and material have the same project
-                if wbs.to_string().starts_with(&user1) { IssueCode::ProjectFromProject }
-    
+                if wbs.to_string().starts_with(&user1) {
+                    IssueCode::ProjectFromProject
+                }
                 // part and material have different projects
-                else { IssueCode::ProjectFromOtherProject }
-            },
+                else {
+                    IssueCode::ProjectFromOtherProject
+                }
+            }
         };
 
-        return (code, user1, user2)
+        return (code, user1, user2);
     }
 
     // unmatched data
@@ -204,8 +234,8 @@ fn infer_codes(row: &CnfFileRow) -> (IssueCode, String, String) {
 
 fn infer_gl_acct(mark: &String) -> String {
     match MACHINES.is_match(mark) {
-        true  => "634124".into(),   // machine parts
-        false => "637118".into()    // all others
+        true => "634124".into(),  // machine parts
+        false => "637118".into(), // all others
     }
 }
 
@@ -221,7 +251,7 @@ mod tests {
             part_loc: "PROD".into(),
             part_qty: 5u64,
             part_uom: "EA".into(),
-            
+
             matl: "50W-0008".into(),
             matl_wbs: Wbs::None,
             matl_qty: 1_001.569f64,
@@ -229,7 +259,7 @@ mod tests {
             matl_loc: Some("K2".into()),
 
             plant: Plant::Lancaster,
-            program: "54091".into()
+            program: "54091".into(),
         }
     }
 
@@ -314,4 +344,3 @@ mod tests {
         let _ = infer_codes(&row);
     }
 }
-

@@ -1,9 +1,11 @@
-
-use std::{cmp::Ordering, hash::{Hash, Hasher}};
+use std::{
+    cmp::Ordering,
+    hash::{Hash, Hasher},
+};
 
 use regex::Regex;
 
-use crate::api::{CnfFileRow, Wbs, Order, OrderData, IssueFileRow};
+use crate::api::{CnfFileRow, IssueFileRow, Order, OrderData, Wbs};
 
 lazy_static! {
     static ref INBOX_TEXT: Regex = Regex::new(r"Planned order not found for (\d{7}[a-zA-Z]-[\w-]+), (D-\d{7}-\d{5}), ([\d,]+).000, Sigmanest Program:([\d-]+)")
@@ -15,7 +17,6 @@ pub enum FailureMatchStatus {
     NoConfirmationRow,
     NotEnoughOrdersApplied(u32),
 }
-
 
 #[derive(Debug)]
 pub struct Failure {
@@ -33,10 +34,10 @@ impl Failure {
         // TODO: return order if qty not applied
 
         match order {
-            Order::PlannedOrder(order_data) => {
-                self.apply_order_unchecked(order_data).map(|d| Order::PlannedOrder(d))
-            },
-            Order::ProductionOrder(_) => panic!("cannot apply a production order to a failure")
+            Order::PlannedOrder(order_data) => self
+                .apply_order_unchecked(order_data)
+                .map(|d| Order::PlannedOrder(d)),
+            Order::ProductionOrder(_) => panic!("cannot apply a production order to a failure"),
         }
     }
 
@@ -45,7 +46,7 @@ impl Failure {
         let failure_qty = self.qty();
 
         if failure_qty == 0 {
-            return Some( order_data );
+            return Some(order_data);
         }
 
         match order_data.qty {
@@ -53,7 +54,7 @@ impl Failure {
                 self.applied.push(order_data);
 
                 None
-            },
+            }
             _ => {
                 let mut not_applied = order_data.clone();
                 not_applied.qty -= failure_qty;
@@ -61,16 +62,14 @@ impl Failure {
                 order_data.qty = failure_qty;
                 self.applied.push(order_data);
 
-                Some( not_applied )
+                Some(not_applied)
             }
         }
     }
 
     /// Returns the qty left to be applied
     pub fn qty(&self) -> u32 {
-        let applied = self.applied
-            .iter()
-            .fold(0, |acc, elem| acc + elem.qty);
+        let applied = self.applied.iter().fold(0, |acc, elem| acc + elem.qty);
 
         self.qty - applied
     }
@@ -87,28 +86,37 @@ impl Failure {
         match &self.cnf_row {
             Some(row) => {
                 let mut result = Vec::new();
-                
+
                 for appl in &self.applied {
                     result.push(row.modify_with(appl));
                 }
-        
+
                 Ok(result)
-            },
-            None => Err(format!("No CnfFileRow matched for {}", self.mark))
+            }
+            None => Err(format!("No CnfFileRow matched for {}", self.mark)),
         }
     }
 
-    pub fn generate_issue_output(&mut self) -> Result<IssueFileRow, String> {
-        match &self.cnf_row {
-            Some(row) => {
-                let mut row = row.clone();
-                row.matl_qty = self.qty() as f64 * row.area_per_ea();
+    pub async fn generate_issue_output(
+        &mut self,
+        conn: &mut crate::db::DbClient,
+    ) -> Result<IssueFileRow, String> {
+        let res = conn
+            .query(
+                "EXEC SapIssueData_ForInboxFailure @Mark=@P1, @Wbs=@P2, @Qty=@P3, @Program=@P4",
+                &[
+                    &self.mark,
+                    &self.wbs.to_string(),
+                    &(self.qty as i32),
+                    &self.program,
+                ],
+            )
+            .await
+            .map_err(|e| format!("Error fetching issue data for {} : {:?}", self.mark, e))?;
 
-                self.qty = 0;
-
-                Ok(row.into())
-            },
-            None => Err(format!("No CnfFileRow matched for {}", self.mark))
+        match res.into_row().await {
+            Ok(Some(ref row)) => Ok(row.into()),
+            _ => Err(format!("No CnfFileRow matched for {}", self.mark)),
         }
     }
 
@@ -136,7 +144,10 @@ impl Failure {
             return None;
         }
 
-        Some(format!("Planned order not found for {}, {}, {}.000, Sigmanest Program:{}", self.mark, self.wbs, qty, self.program))
+        Some(format!(
+            "Planned order not found for {}, {}, {}.000, Sigmanest Program:{}",
+            self.mark, self.wbs, qty, self.program
+        ))
     }
 }
 
@@ -160,12 +171,10 @@ impl PartialOrd for Failure {
 
         if self.mark < other.mark {
             return Some(Ordering::Less);
-        }
-        else if self.mark == other.mark {
+        } else if self.mark == other.mark {
             if self.program < other.program {
                 return Some(Ordering::Less);
-            }
-            else if self.program == other.program {
+            } else if self.program == other.program {
                 if self.wbs < other.wbs {
                     return Some(Ordering::Less);
                 }
@@ -185,29 +194,27 @@ impl Hash for Failure {
 }
 
 /// Parses failure from inbox error string
-/// 
+///
 /// looking to parse a line in the format of
 /// `Planned order not found for {part name}, {wbs elements}, {qty}, Sigmanest Program: {program}`
-/// 
+///
 /// will fail (return Err) if the input string does not match this pattern.
 impl TryFrom<String> for Failure {
     type Error = anyhow::Error;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         if let Some(caps) = INBOX_TEXT.captures(&value) {
-            return Ok(
-                Self {
-                    mark: caps.get(1).unwrap().as_str().into(),
-                    wbs: Wbs::from( caps.get(2).unwrap() ),
-                    qty: caps.get(3).unwrap().as_str().parse().unwrap(),
-                    program: caps.get(4).unwrap().as_str().into(),
+            return Ok(Self {
+                mark: caps.get(1).unwrap().as_str().into(),
+                wbs: Wbs::from(caps.get(2).unwrap()),
+                qty: caps.get(3).unwrap().as_str().parse().unwrap(),
+                program: caps.get(4).unwrap().as_str().into(),
 
-                    cnf_row: None::<CnfFileRow>,
-                    applied: Vec::new(),
-                }
-            )
+                cnf_row: None::<CnfFileRow>,
+                applied: Vec::new(),
+            });
         }
 
-        Err( anyhow!("Failed to parse line `{}`", value) )
+        Err(anyhow!("Failed to parse line `{}`", value))
     }
 }

@@ -2,8 +2,10 @@ use tiberius::{AuthMethod, Client, Config};
 use tokio::net::TcpStream;
 use tokio_util::compat::{Compat, TokioAsyncWriteCompatExt};
 
+pub type DbClient = Client<Compat<TcpStream>>;
+
 /// Builds a connection for a database
-pub async fn connect_to_sn() -> tiberius::Result<Client<Compat<TcpStream>>> {
+pub async fn connect_to_sn() -> tiberius::Result<DbClient> {
     let config = {
         let mut config = Config::new();
         config.host(std::env::var("SndbServer").unwrap());

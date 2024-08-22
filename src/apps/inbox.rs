@@ -1,4 +1,6 @@
 use std::path::PathBuf;
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
 use std::{fs, io};
 
 use eframe::{self, egui};
@@ -11,15 +13,48 @@ use crate::paths::{self, timestamped_file};
 
 const MAX_FILES: usize = 2000;
 
-fn push_str_ls(ls: &mut String, value: impl AsRef<str>) {
-    if ls.len() > 0 {
-        ls.push('\n');
-    }
-
-    ls.push_str(value.as_ref());
+#[derive(Debug)]
+enum BackgroundTask {
+    IssueAll {
+        errors: Vec<String>,
+        move_files: bool,
+    },
 }
 
 #[derive(Debug, Default)]
+struct Log {
+    lines: Mutex<Vec<String>>,
+}
+
+impl Log {
+    pub fn push(&self, val: &dyn ToString) {
+        let mut log = self.lines.lock().unwrap();
+
+        log.push(val.to_string());
+    }
+}
+
+impl log::Log for Log {
+    fn flush(&self) {}
+
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        metadata.level() < log::Level::Debug
+    }
+
+    fn log(&self, record: &log::Record) {
+        self.push(&record.args().to_string());
+    }
+}
+
+impl ToString for Log {
+    fn to_string(&self) -> String {
+        let log = self.lines.lock().unwrap();
+
+        log.join("\n")
+    }
+}
+
+#[derive(Debug)]
 pub struct SapInboxApp {
     files_to_parse: usize,
     max_files: usize,
@@ -28,20 +63,69 @@ pub struct SapInboxApp {
     inbox_errors: String,
     parts_list: String,
     new_inbox: String,
-    log: String,
+    log: Arc<Log>,
 
     popup_error: String,
+    background_agent: mpsc::Sender<BackgroundTask>,
+}
+
+impl Default for SapInboxApp {
+    fn default() -> Self {
+        Self {
+            files_to_parse: 200,
+            max_files: cnf_files::get_num_files().unwrap_or(MAX_FILES),
+            auto_move_files: true,
+            inbox_errors: String::new(),
+            new_inbox: String::new(),
+            background_agent: mpsc::channel().0,
+            parts_list: Default::default(),
+            log: Default::default(),
+            popup_error: Default::default(),
+        }
+    }
 }
 
 impl SapInboxApp {
     const NAME: &'static str = "SAP Inbox Errors";
 
-    pub fn new() -> eframe::AppCreator {
-        Box::new(|cc| Box::new(Self::init(cc)))
+    pub async fn new() -> eframe::AppCreator {
+        let log = Arc::new(Log::default());
+        let app_log = Arc::clone(&log);
+
+        let (tx, rx) = mpsc::channel();
+        tokio::spawn(async move {
+            while let Ok(task) = rx.recv() {
+                match task {
+                    BackgroundTask::IssueAll { errors, move_files } => {
+                        log::info!("Issue all errors requested");
+
+                        if let Err(e) = Self::issue_all(errors).await {
+                            log::error!("{:?}", e);
+                        }
+
+                        if move_files {
+                            for entry in glob::glob("Issue_*.ready").unwrap() {
+                                if let Ok(file) = entry {
+                                    let mut to = paths::SAP_OUTBOUND.to_path_buf();
+                                    to.push(&file);
+
+                                    fs::copy(&file, to).unwrap();
+                                    fs::remove_file(&file).unwrap();
+
+                                    log::info!("Moved file {}", &file.display());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        Box::new(|cc| Box::new(Self::init(cc, tx, app_log)))
     }
 
-    pub fn run() -> eframe::Result<()> {
-        eframe::run_native(Self::NAME, Self::win_opts(), Self::new())
+    pub async fn run() -> eframe::Result<()> {
+        eframe::run_native(Self::NAME, Self::win_opts(), Self::new().await)
     }
 
     fn win_opts() -> eframe::NativeOptions {
@@ -53,7 +137,11 @@ impl SapInboxApp {
         }
     }
 
-    fn init(cc: &eframe::CreationContext<'_>) -> Self {
+    fn init(
+        cc: &eframe::CreationContext<'_>,
+        background_agent: mpsc::Sender<BackgroundTask>,
+        log: Arc<Log>,
+    ) -> Self {
         let (auto_move_files, inbox_errors, new_inbox) = match cc.storage {
             Some(storage) => (
                 storage.get_string("auto_move").unwrap_or_default() == "true",
@@ -67,8 +155,10 @@ impl SapInboxApp {
             files_to_parse: 200,
             max_files: cnf_files::get_num_files().unwrap_or(MAX_FILES),
             auto_move_files,
+            log,
             inbox_errors,
             new_inbox,
+            background_agent,
 
             ..Default::default()
         }
@@ -82,7 +172,8 @@ impl SapInboxApp {
     }
 
     fn log(&mut self, val: impl AsRef<str>) {
-        push_str_ls(&mut self.log, val);
+        let log = self.log.clone();
+        log.push(&val.as_ref().to_string());
     }
 
     pub fn generate_parts(&mut self) -> anyhow::Result<()> {
@@ -112,45 +203,30 @@ impl SapInboxApp {
         Ok(())
     }
 
-    fn issue_all(&mut self) -> anyhow::Result<()> {
+    async fn issue_all(errors: Vec<String>) -> anyhow::Result<()> {
         // parse inbox
-        let mut inbox: Vec<Failure> = parse_failures(self.inbox_errors())
+        let mut inbox: Vec<Failure> = parse_failures(errors.into_iter())
             .into_iter()
             .filter(|f| f.is_ok())
             .map(Result::unwrap)
             .collect();
         inbox.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
-        // get confirmation file data
-        for f in get_last_n_files(self.files_to_parse)? {
-            for cnf_row in parse_file(f.path())? {
-                inbox
-                    .iter_mut()
-                    .filter(|f| **f == cnf_row)
-                    .for_each(|f| f.set_confirmation_row_data(cnf_row.clone()));
-            }
-
-            let has_confirmation_row = inbox.iter().filter(|f| !f.has_confirmation_row()).count();
-
-            if has_confirmation_row == 0 {
-                break;
-            }
-        }
-
+        // get issue data
+        let mut conn = crate::db::connect_to_sn().await?;
         let issuefile = paths::timestamped_file("Issue", "ready");
         let mut records: Vec<IssueFileRow> = Vec::new();
-        inbox
-            .iter_mut()
-            .map(|f| f.generate_issue_output())
-            .for_each(|r| match r {
+
+        for mut inbox_error in inbox {
+            let issue_line = inbox_error.generate_issue_output(&mut conn).await;
+
+            match issue_line {
                 Ok(result) => records.push(result),
                 Err(e) => eprintln!("{}", e),
-            });
+            };
+        }
 
         write_file(records, issuefile.into())?;
-        if self.auto_move_files {
-            self.move_issuefiles()?;
-        }
 
         Ok(())
     }
@@ -275,10 +351,6 @@ impl SapInboxApp {
         self.move_files("Production_*.ready")
     }
 
-    fn move_issuefiles(&mut self) -> io::Result<()> {
-        self.move_files("Issue_*.ready")
-    }
-
     fn move_files(&mut self, pattern: &str) -> io::Result<()> {
         for entry in glob::glob(pattern).unwrap() {
             if let Ok(file) = entry {
@@ -370,23 +442,15 @@ impl eframe::App for SapInboxApp {
                     }
 
                     if !self.inbox_errors.is_empty() {
-                        // TODO: refactor this "button with a popup for errors"
                         let res_issue = ui.button("Issue all errors");
-                        let err_issue = ui.make_persistent_id("issue-error-popup");
-                        egui::popup_below_widget(ui, err_issue, &res_issue, |ui| {
-                            ui.style_mut().wrap = Some(false);
-                            ui.label(&self.popup_error);
-                        });
 
                         if res_issue.clicked() {
-                            // TODO: move this to another thread because it takes a while
-                            match self.issue_all() {
-                                Ok(_) => self.log("Issue file generated"),
-                                Err(e) => {
-                                    self.popup_error = e.to_string();
-                                    ui.memory_mut(|mem| mem.open_popup(err_issue));
-                                }
-                            }
+                            self.background_agent
+                                .send(BackgroundTask::IssueAll {
+                                    errors: self.inbox_errors().map(ToString::to_string).collect(),
+                                    move_files: self.auto_move_files,
+                                })
+                                .unwrap();
                         }
                     }
                 });
@@ -426,9 +490,11 @@ impl eframe::App for SapInboxApp {
                     .id_source("log scroll area")
                     .max_height(100.)
                     .show(ui, |ui| {
-                        egui::TextEdit::multiline(&mut self.log)
-                            .desired_width(f32::INFINITY)
-                            .show(ui);
+                        let log = Arc::clone(&self.log);
+                        ui.label(log.to_string())
+                        // egui::TextEdit::multiline(&mut self.log)
+                        //     .desired_width(f32::INFINITY)
+                        //     .show(ui);
                     });
             });
 

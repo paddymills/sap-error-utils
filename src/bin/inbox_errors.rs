@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 // TODO: cli
-fn main() -> eframe::Result<()> {
-    sap_error_utils::apps::SapInboxApp::run()
+#[tokio::main]
+async fn main() -> eframe::Result<()> {
+    sap_error_utils::apps::SapInboxApp::run().await
 }
