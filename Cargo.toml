@@ -16,6 +16,17 @@ glob = "0.3.1"
 lazy_static = "1.4.0"
 regex = "1.7.1"
 serde = { version = "1.0", features = ["derive"] }
+tiberius = { version = "0.12.3", features = [
+    "sql-browser-tokio",
+    "integrated-auth-gssapi",
+] }
+tokio-util = { version = "0.7.11", features = ["compat"] }
+tokio = { version = "1.38.0", features = [
+    "rt-multi-thread",
+    "macros",
+    "net",
+    "sync",
+] }
 
 [[bin]]
 name = "inbox_errors"
